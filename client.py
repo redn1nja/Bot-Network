@@ -28,6 +28,7 @@ class Client:
     def start_requesting(self):
         while (self.__requests):
             status, time = self.__send_request()
+            print(status, time)
             if status not in self.__data.keys():
                 self.__data[status] = [0, 0]
             self.__data[status][0] += 1
@@ -44,7 +45,7 @@ class Client:
 if __name__ == "__main__":
     c = Client()
     c.set_address("http://0.0.0.0:8000") #python3 -m http.server
-    c.set_requests(15)
+    c.set_requests(1000)
     c.start_requesting()
     data = c.send_datum()
     print(data)
