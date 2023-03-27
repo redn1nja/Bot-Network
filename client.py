@@ -1,5 +1,21 @@
 import socket
 import requests
+import threading
+
+class Listener (threading.Thread):
+    def __init__(self, address):
+        self.address = address
+        threading.Thread.__init__(self)
+    def run(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.address, 5432))
+            s.listen(2)
+            while True:
+                conn, addr = s.accept()
+                data = conn.recv(1024).decode("ascii")
+                if not data:
+                    break
+                print(data)
 
 
 class Client:
@@ -9,14 +25,17 @@ class Client:
         Client.ID += 1
         self.__attack_address = address
         self.__own_address = socket.gethostbyname(socket.gethostname())
+        print(self.get_own_address())
+        self.l = Listener(self.__own_address)
+        self.l.start()
         self.__requests = requests
         self.__data = {}
 
     def set_address(self, address):
         self.__attack_address = address
 
-    def set_requests(self, no):
-        self.__requests = no
+    def set_requests(self):
+        self.__requests = requests.get(self.__own_address, "n").json["n"]
 
     def get_own_address(self):
         return self.__own_address
@@ -43,9 +62,9 @@ class Client:
 
 
 if __name__ == "__main__":
-    c = Client()
+    c = Client(requests=1)
     c.set_address("http://0.0.0.0:8000") #python3 -m http.server
-    c.set_requests(1000)
-    c.start_requesting()
-    data = c.send_datum()
-    print(data)
+    # c.start_requesting()
+    # data = c.send_datum()
+    c.l.join()
+    # print(data)
