@@ -8,31 +8,25 @@ class Host:
         self.address = address
         self.updator = updator
         
-    def handle_connection(self, connection):
-        with connection:
-            while True:
-                data = connection.recv(1024)
-                if not data:
-                    break
-                connection.sendall(data)
-                
     def request_data_from_clients(self):
-        return [client.get_data() for client in self.clients]
+        data = []
+        for client in self.known_clients:
+            client.set_requests()
+            data.append((client.get_own_address(), client.send_datum()))
+        return data
 
     def change_address(self, new_addresss):
         self.address = new_addresss
                 
     def run(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('localhost', self.port))
+            s.bind((self.address))
             s.listen()
+            print(f"Host is running on {self.address}")
             while True:
                 conn, addr = s.accept()
-                if self.running:
-                    threading.Thread(target=self.handle_connection, args=(conn, addr)).start()
-                else:
-                    conn.close()
-
-                client = Client(conn, addr)
+                client = Client(address=addr, host_address=self.address)
                 self.known_clients.add(client)
                 print(f"Connected clients: {len(self.clients)}")
+                data = self.request_data_from_clients()
+                

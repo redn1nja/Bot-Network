@@ -333,5 +333,5 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
-
+__pycache__/
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,clion,jetbrains,visualstudiocode,cmake,c++

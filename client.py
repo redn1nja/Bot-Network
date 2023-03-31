@@ -17,27 +17,30 @@ import threading
 
 class Client:
     ID = 0
-    def __init__(self, address=None, requests=None) -> None:
+    def __init__(self, host_address, address=None, requests=None) -> None:
         self.__id = Client.ID
+        self.__host_address = host_address
         Client.ID += 1
         self.__attack_address = address
         self.__own_address = socket.gethostbyname(socket.gethostname())
         print(self.__own_address)
         self.__requests = requests
         self.__data = {}
+        
+        # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        #     s.connect((host_address))
+        #     s.sendall(self.__own_address.encode())
+        #     print(f"Own address {self.__own_address} was sent to host on {self.__host_address}")
 
     def set_address(self, address):
         self.__attack_address = address
 
     def set_requests(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((self.__own_address, 5432))
-            s.listen(2)
+            s.bind((self.__own_address, 0))
+            s.listen(1)
             conn, addr = s.accept()
             self.__requests = int(conn.recv(1024).decode("ascii"))
-
-
-
 
     def get_own_address(self):
         return self.__own_address
