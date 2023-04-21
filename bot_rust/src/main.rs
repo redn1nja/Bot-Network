@@ -1,29 +1,30 @@
-// // async fn requester(url: &str)->Result<(),Box<dyn Error>>{
-// //     let body = reqwest::blocking::get(url).unwrap().text();
-// //     println!("{:?}", body);
-// //     Ok(())
-// // }
-// fn main() {
-//     let body = reqwest::blocking::get("https://api.nationalize.io?name=ostap")
-//         .unwrap()
-//         .text();
-//     println!("body = {:?}", body)
-//     // println!("{:?}", body);/
-// }
 extern crate iron;
 extern crate router;
 
 use iron::prelude::*;
 use iron::status;
 use router::Router;
+use std::vec;
 
+struct ServerData {
+    attack_address: String,
+    ret_data: Vector,
+}
+
+impl ServerData {
+    fn new(addr:String, ret:Vector) -> ServerData{
+        ServerData{attack_address:addr, ret_data:ret}
+    }
+
+}
 
 fn main() {
     let mut router = Router::new();
-
+    let mut server = ServerData::new(String::from("15"), vec![]);
     router.get("/", hello_world, "index");
     fn hello_world(_: &mut Request) -> IronResult<Response> {
-        Ok(Response::with((status::Ok, "Hello World!")))
+        let data()= ||->String{server.attack_address}();
+        Ok(Response::with((status::Ok, data)))
     }
 
     router.get("/api/get_requests", get_data, "data");
