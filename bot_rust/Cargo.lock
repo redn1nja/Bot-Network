@@ -40,9 +40,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "bodyparser"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f023abfa58aad6f6bc4ae0630799e24d5ee0ab8bb2e49f651d9b1f9aa4f52f30"
+dependencies = [
+ "iron",
+ "persistent",
+ "plugin",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "bot_rust"
 version = "0.1.0"
 dependencies = [
+ "bodyparser",
  "iron",
  "persistent",
  "reqwest",

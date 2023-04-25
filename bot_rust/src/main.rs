@@ -1,6 +1,8 @@
 extern crate iron;
 extern crate router;
+extern crate bodyparser;
 
+use std::ops::Deref;
 use iron::prelude::*;
 use iron::status;
 use router::Router;
@@ -29,6 +31,18 @@ fn main() {
         });
         Ok(Response::with((status::Ok, attack_info.to_string())))
     }, "attack_info");
-    
+
+    router.post("attack_info", move |req:&mut Request|{
+        let body = req.get::<bodyparser::Json>().unwrap();
+        let received = match body {
+            None => serde_json::json!({"error": "No body"}).to_string(),
+            Some(body) => serde_json::json!(body).to_string(),
+        };
+
+
+
+        println!("Received body:\n{}", received);
+        Ok(Response::with((status::Ok, "ok")))
+    }, "set_attack_info");
     Iron::new(router).http("localhost:8080").unwrap();
 }
