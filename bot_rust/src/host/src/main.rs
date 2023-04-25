@@ -3,7 +3,6 @@ use serde_json;
 use std::io;
 use core::error::Error;
 
-
 struct Host {
     server_address: String,
     attack_address: String,
@@ -92,7 +91,7 @@ impl Host {
     }
 
     fn _receive_attack_info(&mut self) -> Result<(), Error> {
-        let client = client::new();
+        let client = Client::new();
         let res = client
             .get(&format!("http://{}/attack_info", self.server_address))
             .send()?;
@@ -121,5 +120,9 @@ impl Host {
             // )))
         }
     }
+}
+
+fn main(){
+    let mut host = Host::new(String::from("http://localhost8000"));
 }
 
