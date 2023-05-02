@@ -75,7 +75,8 @@ impl Client {
                 worker.attacking = false;
                 let mut var = false;
                 while !var {
-                    var = cv.wait(worker).unwrap().attacking;
+                    worker = cv.wait(worker).unwrap();
+                    var = worker.attacking;
                 }
             }
         }
