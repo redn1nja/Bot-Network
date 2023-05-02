@@ -22,7 +22,7 @@ fn main() {
          )",[]).unwrap();
     router.get(
         "/api/attack",
-        move |_: &mut Request| Ok(Response::with((status::Ok, "true"))),
+        move |_: &mut Request| Ok(Response::with((status::Ok, "false"))),
         "attack",
     );
     router.get(

