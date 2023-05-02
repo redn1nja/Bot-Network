@@ -1,5 +1,6 @@
 use serde_json;
 use std::sync::{Arc, Mutex};
+use serde_json::Value;
 
 struct Client {
     host_address: String,
@@ -20,9 +21,9 @@ struct Worker {
 impl Worker {
     fn new(addr: String, host: String) -> Worker {
         let client = reqwest::blocking::Client::new();
-        let mut add = addr.clone();
+        let mut add = host.clone();
         add.push_str("/attack_info");
-        Worker {host_address: host, attacking: true, address: add, client }
+        Worker {host_address: add, attacking: true, address: addr, client }
     }
     fn start_requesting(&self) -> i32{
         if self.attacking {
@@ -42,7 +43,7 @@ impl Worker {
 impl Client {
     fn new(host: String, addr: String) -> Client {
         let mut cl = Client { host_address: host, address: addr, attacking: false, workers: vec![], worker_threads: vec![] };
-        let thread_count = (std::thread::available_parallelism().unwrap().get());
+        let thread_count = (std::thread::available_parallelism().unwrap().get())*4;
         cl.worker_threads.reserve(thread_count);
         for _ in 0..thread_count {
             cl.workers.push(Arc::new(Mutex::new(
@@ -120,6 +121,7 @@ impl Client {
 
 
 fn main() {
-    let cl = Client::new(String::from("http://localhost:8080"), String::from("https://cat-fact.herokuapp.com/facts/"));
+    let cl = Client::new(String::from("http://localhost:8080"),
+                         String::from("http://localhost:8000"));
     cl.run();
 }

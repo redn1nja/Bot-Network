@@ -50,7 +50,6 @@ fn main() {
         "/attack_info",
         move |req: &mut Request| {
             let res = req.get::<bodyparser::Json>().unwrap().unwrap();
-            // let received = serde_json::from_str::<serde_json::Value>(res.as_str()).unwrap().to_string();
             let conn = Connection::open("bot_network.db").unwrap();
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS request_info (
