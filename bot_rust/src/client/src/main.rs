@@ -1,14 +1,12 @@
 use serde_json;
-use std::sync::{Arc, Mutex};
-use serde_json::Value;
+use std::sync::{Arc, Mutex, Condvar};
 
 struct Client {
     host_address: String,
     address: String,
     attacking: bool,
-    workers: Vec<Arc<Mutex<Worker>>>,
+    workers: Vec<Arc<(Mutex<Worker>, Condvar)>>,
     worker_threads: Vec<std::thread::JoinHandle<()>>,
-
 }
 
 struct Worker {
@@ -46,8 +44,11 @@ impl Client {
         let thread_count = (std::thread::available_parallelism().unwrap().get())*4;
         cl.worker_threads.reserve(thread_count);
         for _ in 0..thread_count {
-            cl.workers.push(Arc::new(Mutex::new(
-                Worker::new(cl.address.clone(), cl.host_address.clone()))));
+            cl.workers.push(Arc::new((
+                Mutex::new(Worker::new(cl.address.clone(), cl.host_address.clone())),
+                    Condvar::new()
+            )));
+
         }
         cl.host_address.push_str("/api/attack");
         return cl;
@@ -58,22 +59,33 @@ impl Client {
         let req = reqwest::blocking::get(url).unwrap().text().unwrap();
         if req == String::from("true") {
             self.attacking = true;
-            for elem in self.workers.iter_mut() {
+            for el in self.workers.iter_mut() {
+                let clone_el = el.clone();
+                let (elem, cv) = &*clone_el;
                 let mut worker = elem.lock().unwrap();
                 worker.attacking = true;
+                cv.notify_one();
             }
         } else {
             self.attacking = false;
-            for elem in self.workers.iter_mut() {
+            for el in self.workers.iter_mut() {
+                let clone_el = el.clone();
+                let (elem, cv) = &*clone_el;
                 let mut worker = elem.lock().unwrap();
                 worker.attacking = false;
+                let mut var = false;
+                while !var {
+                    var = cv.wait(worker).unwrap().attacking;
+                }
             }
         }
     }
 
-    fn thread_worker(worker: Arc<Mutex<Worker>>){
+    fn thread_worker(worker: Arc<(Mutex<Worker>, Condvar)>){
         loop {
-            let w = worker.lock().unwrap();
+            let el = worker.clone();
+            let (elem, _) = &*el;
+            let w = elem.lock().unwrap();
             println!("{}", w.attacking);
             let mut _r = 0;
             for _ in 0..20 {
