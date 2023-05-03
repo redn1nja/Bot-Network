@@ -7,7 +7,7 @@ extern crate rusqlite;
 use iron::prelude::*;
 use iron::status;
 use router::Router;
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
 use serde_json;
 use std::vec;
 
