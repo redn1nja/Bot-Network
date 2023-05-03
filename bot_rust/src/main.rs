@@ -22,6 +22,8 @@ fn create_tables (conn: &Connection){
              id INTEGER PRIMARY KEY AUTOINCREMENT,
              address TEXT)"
                  ,[]).unwrap();
+    conn.execute("DELETE FROM attack_address", []).unwrap();
+    conn.execute("INSERT INTO attack_address (address) VALUES (?1)", [""]).unwrap();
 }
 fn main() {
     let mut router = Router::new();
