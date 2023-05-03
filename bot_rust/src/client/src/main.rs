@@ -58,7 +58,21 @@ impl Client {
     fn can_attack(&mut self) {
         let url = self.host_address.as_str();
         let req = reqwest::blocking::get(url).unwrap().text().unwrap();
-        if req == String::from("true") {
+
+        let attack_address_url = format!("{}/api/attack_address", self.host_address);
+        let attack_address_resp = reqwest::blocking::get(&attack_address_url);
+        let mut can_attack = false;
+        if let Ok(resp) = attack_address_resp {
+            if resp.status() == reqwest::StatusCode::OK {
+                let body = resp.text().unwrap();
+                if !body.is_empty() {
+                    println!("Attack address found: {}", body);
+                    can_attack = true;
+                }
+            }
+        }
+
+        if can_attack {
             println!("can attack");
             self.attacking = true;
             for el in self.workers.iter_mut() {

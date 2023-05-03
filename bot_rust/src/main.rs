@@ -47,6 +47,19 @@ fn main() {
     );
 
     router.post(
+        "/api/attack",
+        move |req: &mut Request| {
+            let body = req.get::<bodyparser::Json>().unwrap();
+            let _received = match body {
+                None => serde_json::json!({"error": "No body"}).to_string(),
+                Some(body) => serde_json::json!(body).to_string(),
+            };
+            Ok(Response::with((status::Ok, "ok")))
+        },
+            "attack_post",
+    );
+
+    router.post(
         "/attack_info",
         move |req: &mut Request| {
             let res = req.get::<bodyparser::Json>().unwrap().unwrap();
