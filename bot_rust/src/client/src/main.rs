@@ -1,4 +1,3 @@
-use std::cell::Ref;
 use serde_json;
 use std::sync::{Arc, Mutex, Condvar};
 use dashmap::DashMap;
@@ -38,7 +37,6 @@ impl Worker {
             let local_instance =  self.results.clone();
             while !local_instance.contains_key(&self.id){};
             local_instance.get_mut(&self.id).unwrap().push(response_body.to_string());
-            // println!("this thread sent something: {}", self.id);
             return 0;
         }
         1
@@ -77,50 +75,30 @@ impl Client {
             can_attack = false;
         }
         self.address = attack_address_url.to_string();
-        if can_attack {
-            // println!("can attack");
-            self.attacking = true;
-            for el in self.workers.iter_mut() {
-                let clone_el = el.clone();
-                let (elem, cv) = &*clone_el;
-                let worker_lock = elem.try_lock();
-                match worker_lock {
-                    Ok(_) => {
-                        let mut worker = worker_lock.unwrap();
-                        // println!("main thread captured mutex {}: ", worker.id);
-                        worker.address = self.address.clone();
-                        worker.attacking = true;
+        self.attacking = can_attack;
+        for el in self.workers.iter_mut() {
+            let clone_el = el.clone();
+            let (mx, cv) = &*clone_el;
+            let worker_lock = mx.lock();
+            match worker_lock {
+                Ok(_) => {
+                    println!("Worker locked");
+                    let mut worker = worker_lock.unwrap();
+                    worker.address = self.address.clone();
+                    worker.attacking = can_attack;
+                    if can_attack {
                         cv.notify_one();
                     }
-                    Err(_) => {continue;}
                 }
-            }
-        } else {
-            // println!("can't attack");
-            self.attacking = false;
-            for el in self.workers.iter_mut() {
-                let clone_el = el.clone();
-                // println!("main thread command: is to stop");
-                let (elem, _cv) = &*clone_el;
-                let worker_lock = elem.try_lock();
-                match worker_lock {
-                    Ok(_) => {
-                        let mut worker = worker_lock.unwrap();
-                        // println!("main thread captured mutex {}: ", worker.id);
-                        worker.address = self.address.clone();
-                        worker.attacking = false;
-                    }
-                    Err(_) => {continue;}
-                }
-            }
+                Err(_) => {}
         }
+        }
+        println!();
     }
-
     fn thread_worker(worker: Arc<(Mutex<Worker>, Condvar)>) {
         let el = worker.clone();
         let (elem, cv) = &*el;
         loop {
-            // println!("mutex is free now:");
             {
                 let mut w = elem.lock().unwrap();
                 if !w.attacking {
@@ -132,7 +110,6 @@ impl Client {
             for _ in 0..5 {
                 _r = w.start_requesting();
             }
-            // println!("mutex is released after sending {}", w.id);
         }
     }
 
@@ -148,7 +125,6 @@ impl Client {
             }));
             i += 1;
         }
-        // println!("main thread finished creating");
         self.can_attack();
         let map = &*self.results.clone();
         loop {
@@ -160,14 +136,11 @@ impl Client {
                 cl.post(format!("{}/attack_info", self.host_address.as_str())).json(&request_body_vec).send().unwrap();
                 map.alter_all(|_, mut v| {
                     v.clear();
-
                     v
                 });
             }
             self.can_attack();
         }
-
-
         while self.worker_threads.len() > 0 {
             let thread = self.worker_threads.pop().unwrap();
             thread.join().unwrap();
