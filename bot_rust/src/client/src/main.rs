@@ -10,6 +10,7 @@ struct Client {
     workers: Vec<Arc<(Mutex<Worker>, Condvar)>>,
     worker_threads: Vec<std::thread::JoinHandle<()>>,
     results: Arc<DashMap<u32, Vec<String>>>,
+    thread_count: usize,
 }
 
 struct Worker {
@@ -45,7 +46,7 @@ impl Worker {
 
 impl Client {
     fn new(host: String) -> Client {
-        let thread_count = std::thread::available_parallelism().unwrap().get();
+        let thread_count = std::thread::available_parallelism().unwrap().get()*4;
         let mut cl = Client {
             host_address: host,
             address: String::new(),
@@ -53,6 +54,7 @@ impl Client {
             workers: vec![],
             worker_threads: vec![],
             results: Arc::new(DashMap::with_capacity(thread_count)),
+            thread_count
         };
         cl.worker_threads.reserve(thread_count);
         for i in 0..thread_count {
@@ -82,7 +84,6 @@ impl Client {
             let worker_lock = mx.lock();
             match worker_lock {
                 Ok(_) => {
-                    println!("Worker locked");
                     let mut worker = worker_lock.unwrap();
                     worker.address = self.address.clone();
                     worker.attacking = can_attack;
@@ -115,15 +116,12 @@ impl Client {
 
     fn run(mut self) {
         // let cl = reqwest::blocking::Client::new();
-        let max_size = self.workers.capacity();
-        let mut i = 0;
-        while i < max_size {
+        for i in 0..self.thread_count {
             let ind = i.to_owned().clone();
             let worker = self.workers[ind].clone();
             self.worker_threads.push(std::thread::spawn(move || {
                 Client::thread_worker(worker);
             }));
-            i += 1;
         }
         self.can_attack();
         let addr = self.host_address.to_owned().clone();
