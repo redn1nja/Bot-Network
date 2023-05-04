@@ -10,7 +10,7 @@ use router::Router;
 use rusqlite::Connection;
 use serde_json;
 use std::vec;
-use serde_json::Value;
+use serde_json::{from_str, Value};
 
 fn create_tables (conn: &Connection){
     conn.execute(
@@ -93,11 +93,12 @@ fn main() {
             let resp: Vec<&str> = response.split("}\",\"{").collect();
             let mut jsons: Vec<Value> = vec![];
             for elem in resp {
-                let mut val = elem.to_string();
+                let val = elem.to_string();
                 let mut splitted = val.split("\",").collect::<Vec<&str>>();
-                let mut code = splitted.pop().unwrap().to_string().split("\":").collect::<Vec<&str>>()[1].to_string();
-                let mut body = splitted.pop().unwrap().to_string().split(":").collect::<Vec<&str>>()[1].to_string();
-                jsons.push(serde_json::json!({"code": code, "body": body}));
+                let code = splitted.pop().unwrap().to_string().split(":").collect::<Vec<&str>>()[1].to_string();
+                let body = splitted.pop().unwrap().to_string().split("\":").collect::<Vec<&str>>()[1].to_string();
+                let status = from_str::<i32>(code.trim_matches(|c| char::is_ascii_punctuation(&c))).unwrap();
+                jsons.push(serde_json::json!({"code": status, "body": body}));
             }
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);

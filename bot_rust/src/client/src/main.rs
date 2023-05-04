@@ -1,5 +1,6 @@
 use serde_json;
 use std::sync::{Arc, Mutex, Condvar};
+use std::time;
 use dashmap::DashMap;
 
 struct Client {
@@ -128,18 +129,23 @@ impl Client {
         let addr = self.host_address.to_owned().clone();
         let armap = self.results.to_owned().clone();
         let handl = std::thread::spawn(move || {
+            let time = time::Duration::from_millis(950);
             let cl = reqwest::blocking::Client::new();
             let map = &*armap;
-            let mut request_body_vec = Vec::new();
-            for el in map.iter() {
-                request_body_vec.extend(el.value().to_owned());
+            loop{
+                std::thread::sleep(time);
+                let mut request_body_vec = Vec::new();
+                for el in map.iter() {
+                    request_body_vec.extend(el.value().to_owned());
+                }
+                println!("Throughput: {}", request_body_vec.len());
+                if request_body_vec.len() >= 20 {
+                    cl.post(format!("{}/attack_info", addr.to_owned().clone())).json(&request_body_vec).send().unwrap();
+                    map.alter_all(|_, mut v| {
+                        v.clear();
+                        v
+                    });
             }
-            if request_body_vec.len() >= 20 {
-                cl.post(format!("{}/attack_info", addr.to_owned().clone())).json(&request_body_vec).send().unwrap();
-                map.alter_all(|_, mut v| {
-                    v.clear();
-                    v
-                });
         }});
         loop {
             self.can_attack();
