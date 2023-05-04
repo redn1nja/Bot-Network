@@ -1,0 +1,21 @@
+<!-- form.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit URL</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Submit a URL</h1>
+        <form action="/submit_url" method="post">
+            <label for="url">URL:</label>
+            <input type="url" name="url" id="url" required>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+</body>
+</html>
