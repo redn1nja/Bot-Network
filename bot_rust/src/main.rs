@@ -96,7 +96,12 @@ fn main() {
                 let val = elem.to_string();
                 let mut splitted = val.split("\",").collect::<Vec<&str>>();
                 let code = splitted.pop().unwrap().to_string().split(":").collect::<Vec<&str>>()[1].to_string();
-                let body = splitted.pop().unwrap().to_string().split("\":").collect::<Vec<&str>>()[1].to_string();
+                let body_opt = splitted.pop();
+                let mut body = String::new();
+                match body_opt {
+                    None => {continue;},
+                    Some(body_opt) => {body = body_opt.to_string().split("\":").collect::<Vec<&str>>()[1].to_string();},
+                }
                 let status = from_str::<i32>(code.trim_matches(|c| char::is_ascii_punctuation(&c))).unwrap();
                 jsons.push(serde_json::json!({"code": status, "body": body}));
             }

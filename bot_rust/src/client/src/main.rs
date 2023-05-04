@@ -33,18 +33,18 @@ impl Worker {
         if self.attacking {
             let to_attack = self.address.as_str();
             let result = self.client.get(to_attack).send();
-            match result {
+            return match result {
                 Ok(_) => {
                     let res = result.unwrap();
                     let code = res.status().as_u16().to_string();
                     let body = res.text().unwrap();
                     let response_body = serde_json::json!({"code": code, "body":body});
-                    let local_instance =  self.results.clone();
+                    let local_instance = self.results.clone();
                     local_instance.get_mut(&self.id).unwrap().push(response_body.to_string());
-                    return 0;
+                    0
                 }
                 Err(_) => {
-                    return 1;
+                    1
                 }
             }
         }
