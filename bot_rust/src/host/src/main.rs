@@ -13,7 +13,7 @@ impl Host {
         Host {
             server_address,
             attack_address: String::new(),
-            client
+            client,
         }
     }
 
@@ -36,10 +36,10 @@ impl Host {
 
     fn send_attack_info(&self) {
         let attack_info = serde_json::json!({
-            "attack_address": &self.attack_address,
+            "attack": &self.attack_address,
         });
 
-        let req = self.client.post(&format!("http://{}/attack_info", self.server_address)).json(&attack_info).send().unwrap();
+        let req = self.client.post(("http://localhost:8080/api/attack")).json(&attack_info).send().unwrap();
     }
 
     fn receive_attack_info(&mut self) {
@@ -74,7 +74,7 @@ fn stop_attack_wrapper(host_: &mut Host) {
 }
 
 fn print_info(_host_: &mut Host) {
-    println!("Main commands:");
+    println!("Commands:");
     println!("1. Type 'set' to set attack info.");
     println!("2. Type 'help' to see the list of available options.");
     println!("3. Type 'start' to start the attack.");
@@ -113,7 +113,7 @@ fn main() {
                 } else {
                     x.1(&mut host);
                 }
-            },
+            }
             None => println!("Invalid command.\nType 'help' to see the list of available options."),
         }
     }
