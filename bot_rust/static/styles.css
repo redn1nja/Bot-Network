@@ -1,0 +1,82 @@
+/* styles.css */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #181818;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #181818;
+    text-align: center;
+}
+
+h1 {
+    color: #ffffff;
+    font-size: 36px;
+    margin-bottom: 30px;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+label, input {
+    color: #ffffff;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+input[type="url"] {
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    background-color: #333;
+    color: #ffffff;
+}
+
+button, .back-button {
+    background-color: #e50914;
+    color: white;
+    font-size: 16px;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px;
+    text-decoration: none;
+    display: inline-block;
+    width: 180px; /* Set the width */
+    height: 80px; /* Set the height */
+    line-height: 20px;
+    box-sizing: border-box; /* Include padding and border in the total width and height */
+}
+
+button:hover, .back-button:hover {
+    background-color: #d40c0c;
+}
+
+.back-button {
+    background-color: #4CAF50;
+}
+
+.back-button:hover {
+    background-color: #45a049;
+}
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 30px;
+    margin-bottom: 30px;
+}
+
+a {
+    color: #ffffff;
+    text-decoration: none;
+}
