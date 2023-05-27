@@ -191,8 +191,8 @@ impl Client {
     }
 }
 
-
-fn main() {
+#[no_mangle]
+pub extern "C" fn main() {
     let mut cl = Client::new(String::from("http://localhost:8080"));
     cl.run();
 }

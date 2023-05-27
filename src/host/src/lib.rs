@@ -81,7 +81,9 @@ fn print_info(_host_: &mut Host) {
     println!("4. Type 'stop' to stop the attack.");
 }
 
-fn main() {
+
+#[no_mangle]
+pub extern "C" fn main() {
     let server_address = String::from("https://localhost:8000");
     let mut host = Host::new(server_address);
 
@@ -118,4 +120,3 @@ fn main() {
         }
     }
 }
-
