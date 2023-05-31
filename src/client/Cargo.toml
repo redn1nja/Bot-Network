@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 reqwest = { version = "0.11.2", features = ["blocking", "json"] }
 serde_json = "1.0"
 dashmap = "5.4.0"
+shared-mutex = "0.3.1"
 
 
 [profile.dev]

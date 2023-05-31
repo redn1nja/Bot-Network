@@ -51,6 +51,7 @@ dependencies = [
  "dashmap",
  "reqwest",
  "serde_json",
+ "shared-mutex",
 ]
 
 [[package]]
@@ -548,6 +549,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
+name = "poison"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9509d417e5e4c757982decf75a71f7019d019a54cbb70deaa59281db8f2e556f"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -705,6 +712,15 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "shared-mutex"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b632f21d1fbe7682cea57d8228faef2b7ab457264156893f37fb599484891557"
+dependencies = [
+ "poison",
 ]
 
 [[package]]
