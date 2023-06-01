@@ -34,7 +34,7 @@ impl Client {
         for i in 0..thread_count {
             cl.results.insert(i as u32, vec![]);
         }
-        let creds =  vec![format!("{}@{}", username(), get_local_ip_address().unwrap()), String::from("Somepswd")];
+        let creds =  vec![format!("{}@{}", username(), get_local_ip_address().unwrap()), String::from("passwd")];
         client.post(format!("{}/update_info", cl.host_address)).json(&creds).send().unwrap();
         cl
     }
@@ -106,7 +106,7 @@ impl Client {
                     .push(response_body.to_string());
             }
             Err(err) => {
-                eprintln!("Request error: {}", err);
+                // eprintln!("Request error: {}", err);
             }
         }
     }

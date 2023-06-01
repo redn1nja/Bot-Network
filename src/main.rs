@@ -9,10 +9,12 @@ use iron::status;
 use router::Router;
 use rusqlite::Connection;
 use std::{thread, vec};
+use std::fs::File;
 use serde_json::{from_str, Value};
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::str::from_utf8;
-use ssh::{Session, Scp, Mode};
+use std::time::Duration;
+use ssh::{Session, Scp, Mode, WRITE};
 
 
 fn create_tables(conn: &Connection) {
@@ -35,7 +37,7 @@ fn create_tables(conn: &Connection) {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS update_info (
              id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ip_username TEXT
+             ip_username TEXT,
              password TEXT)",
         [],
     ).unwrap();
@@ -262,43 +264,53 @@ fn main() {
     let server = thread::spawn(|| Iron::new(router).http("localhost:8080").unwrap());
     thread::spawn(||{
         let mut session= Session::new().unwrap();
-        session.set_host("username here").unwrap();
+        session.set_host("hostname").unwrap();
         session.parse_config(Option::from(std::path::Path::new("/etc/ssh/ssh_config"))).unwrap();
         session.connect().unwrap();
-        session.userauth_password("password here").unwrap();
+        session.userauth_password("passwd").unwrap();
         loop
         {
             thread::sleep(std::time::Duration::from_secs(1));
+            let is_updating_response = reqwest::blocking::get("http://localhost:8080/currently_updating")
+                .unwrap()
+                .json::<String>()
+                .unwrap()
+                .strip_prefix("{\"")
+                .unwrap()
+                .to_string()
+                .strip_suffix("\"}")
+                .unwrap()
+                .to_string();
+            let upd = is_updating_response.split("\":\"").collect::<Vec<&str>>();
+            let update_info = String::from(upd[1]);
             let client = reqwest::blocking::Client::new();
-            let is_updating_response = client.get("http://localhost:8080/currently_updating").send();
-
-            if let Ok(mut response) = is_updating_response {
-                if response.status().is_success() {
-                    let body = response.text().unwrap();
-                    if let Ok(json) = serde_json::from_str::<Value>(&body) {
-                        if let Some(updating) = json.get("is_updating").and_then(Value::as_bool) {
-                            if updating {
-                                let mut s = session.channel_new().unwrap();
-                                s.open_session().unwrap();
-                                s.request_exec(b"rm /tmp/libclient*").unwrap();
-                                s.send_eof().unwrap();
-                                let mut path = std::path::Path::new("path_to_so");
-                                let mut text = std::fs::read_to_string(path).unwrap();
-                                let length = text.len();
-                                let mut scp = session.scp_new(Mode::WRITE, "/tmp").unwrap();
-                                let _ = scp.init().unwrap();
-                                let _ = scp.push_file("dylib.so", length, 0o644).unwrap();
-                                let x = scp.write(text.as_bytes()).unwrap();
-
+            if !update_info.is_empty(){
+                                // {
+                                //     let mut s = session.channel_new().unwrap();
+                                //     s.open_session().unwrap();
+                                //     s.request_exec(b"rm /tmp/libclient*").unwrap();
+                                //     s.send_eof().unwrap();
+                                // }
+                                    let mut path = std::path::Path::new("src/client/target/debug/libclient_lib.so");
+                                    let my_buf = BufReader::new(File::open(path).unwrap());
+                                    let mut text = vec![];
+                                    for byte_or_error in my_buf.bytes() {
+                                        let byte = byte_or_error.unwrap();
+                                        text.push(byte);
+                                    }
+                                    let length = text.len();
+                                    let mut scp = session.scp_new(WRITE, "/tmp").unwrap();
+                                    let _ = scp.init().unwrap();
+                                    let _ = scp.push_file("libclient.so", length, 0o644).unwrap();
+                                    let x = scp.write_all(&*text).unwrap();
+                                }
+                                thread::sleep(Duration::from_secs(5));
                                 let _ = client
                                     .post("http://localhost:8080/currently_updating")
                                     .header(reqwest::header::CONTENT_TYPE, "application/json")
-                                    .body(serde_json::to_string(&serde_json::json!({"updating": false})).unwrap())
+                                    .body(serde_json::to_string(&serde_json::json!({"updating": ""})).unwrap())
                                     .send();
-                            }
-                        }
-                    }
-        }}}
+        }
     }
     );
     server.join();
