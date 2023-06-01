@@ -204,7 +204,7 @@ fn main() {
                 .unwrap();
             let mut value = String::new();
             for elem in iter {
-                value = elem.unwrap()["address"].to_string();
+                value = elem.unwrap()["is_updating"].to_string();
 
             }
             Ok(Response::with((status::Ok, value)))
@@ -215,16 +215,17 @@ fn main() {
         "/currently_updating",
         move |req: &mut Request| {
             let body = req.get::<bodyparser::Json>().unwrap();
-            let _received = match body {
-                None => serde_json::json!({"address": ""}),
-                Some(body) => serde_json::json!({ "updating": body }),
+            let received = match body {
+                None => serde_json::json!({"is_ipdating": ""}),
+                Some(body) => serde_json::json!({"is_updating": body }),
             };
+            println!("{}", received["is_updating"]);
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);
             conn.execute("DELETE FROM is_updating", []).unwrap();
             conn.execute(
                 "INSERT INTO is_updating (is_updating) VALUES (?1)",
-                [_received["updating"].to_string()],
+                [received["is_updating"].to_string()],
             )
                 .unwrap();
             Ok(Response::with((status::Ok, "ok")))

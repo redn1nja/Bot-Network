@@ -14,7 +14,8 @@ reqwest = { version = "0.11.2", features = ["blocking", "json"] }
 serde_json = "1.0"
 dashmap = "5.4.0"
 shared-mutex = "0.3.1"
-
+whoami = "1.4.0"
+local-ip-addr = "0.1.1"
 
 [profile.dev]
 opt-level = 0

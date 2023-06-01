@@ -24,10 +24,9 @@ fn main() {
     loop {
         unsafe {
             let lib = Library::new(&library_path).expect("Failed to load dynamic library");
-            let main_fun: Symbol<extern "C" fn() -> bool> =
+            let main_fun: Symbol<extern "C" fn()> =
                 lib.get(b"startup").expect("Failed to load function");
-            let result = main_fun();
-
+            main_fun();
             let new_library_path = format!("/tmp/libclient_lib.{}", LIB_EXTENSION);
             if std::path::Path::new(&new_library_path).exists() {
                 lib.get::<Symbol<extern "C" fn()>>(b"shutdown")
