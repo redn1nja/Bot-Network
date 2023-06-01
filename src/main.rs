@@ -9,8 +9,11 @@ use iron::status;
 use router::Router;
 use rusqlite::Connection;
 use serde_json;
-use std::vec;
+use std::{thread, vec};
 use serde_json::{from_str, Value};
+use std::io::{Read, Write};
+use std::str::from_utf8;
+use ssh::{Session, Scp, Mode};
 
 fn create_tables (conn: &Connection){
     conn.execute(
@@ -116,7 +119,31 @@ fn main() {
         },
         "set_attack_info",
     );
+    let server = thread::spawn(|| Iron::new(router).http("localhost:8080").unwrap());
+    thread::spawn(||{
+        let mut session=Session::new().unwrap();
+        session.set_host("username here").unwrap();
+        session.parse_config(Option::from(std::path::Path::new("/etc/ssh/ssh_config"))).unwrap();
+        session.connect().unwrap();
+        session.userauth_password("password here").unwrap();
+        {
+            let mut path = std::path::Path::new("/home/ostap/Downloads/install.sh");
+            let mut text = std::fs::read_to_string(path).unwrap();
+            let length = text.len();
+            let mut scp = session.scp_new(Mode::all(), std::path::Path::new(".")).unwrap();
+            let _ = scp.init().unwrap();
+            let _ = scp.push_file("test.txt", length, 0x436).unwrap();
+            let x = scp.write(text.as_bytes()).unwrap();
+            // let mut scp = session.scp_new(Mode::all(), std::path::Path::new("~")).unwrap();
+            // let _ = scp.init().unwrap();
+            // let request = scp.pull_request().unwrap();
+            // scp.reader();
+            // let _ = scp.read(&mut buf);
 
-    Iron::new(router).http("localhost:8080").unwrap();
+        }
+        }
+    );
+    server.join();
+
 }
 
