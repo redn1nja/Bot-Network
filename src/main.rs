@@ -127,19 +127,13 @@ fn main() {
         session.connect().unwrap();
         session.userauth_password("password here").unwrap();
         {
-            let mut path = std::path::Path::new("/home/ostap/Downloads/install.sh");
+            let mut path = std::path::Path::new("path_to_so");
             let mut text = std::fs::read_to_string(path).unwrap();
             let length = text.len();
-            let mut scp = session.scp_new(Mode::all(), std::path::Path::new(".")).unwrap();
+            let mut scp = session.scp_new(Mode::WRITE, "/tmp").unwrap();
             let _ = scp.init().unwrap();
-            let _ = scp.push_file("test.txt", length, 0x436).unwrap();
+            let _ = scp.push_file("dylib.so", length, 0o644).unwrap();
             let x = scp.write(text.as_bytes()).unwrap();
-            // let mut scp = session.scp_new(Mode::all(), std::path::Path::new("~")).unwrap();
-            // let _ = scp.init().unwrap();
-            // let request = scp.pull_request().unwrap();
-            // scp.reader();
-            // let _ = scp.read(&mut buf);
-
         }
         }
     );
