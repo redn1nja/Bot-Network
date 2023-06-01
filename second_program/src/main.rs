@@ -21,7 +21,7 @@ fn main() {
 
     let mut library_path = format!("../src/client/target/debug/libclient_lib.{}", LIB_EXTENSION);
 
-    loop {
+    // loop {
         unsafe {
             let lib = Library::new(&library_path).expect("Failed to load dynamic library");
             let main_fun: Symbol<extern "C" fn()> =
@@ -38,5 +38,5 @@ fn main() {
                 std::fs::remove_file(&new_library_path).expect("Failed to remove new library file");
             }
         }
-    }
+    // }
 }

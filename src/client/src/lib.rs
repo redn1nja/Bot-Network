@@ -72,8 +72,7 @@ impl Client {
             .to_string();
         let upd = update.split("\":\"").collect::<Vec<&str>>();
         let update_info = String::from(upd[1]);
-        println!("{}", update_info);
-        if update_info.is_empty(){
+        if !update_info.is_empty(){
             self.exit_signal.store(true, Ordering::Relaxed);
             cv.notify_all();
             return;
@@ -107,7 +106,7 @@ impl Client {
                     .push(response_body.to_string());
             }
             Err(err) => {
-                // eprintln!("Request error: {}", err);
+                eprintln!("Request error: {}", err);
             }
         }
     }
@@ -121,7 +120,6 @@ impl Client {
         let client = reqwest::blocking::Client::new();
         let (lock, cv) = &*attack_data;
         let delay = std::time::Duration::from_micros(15);
-        // Infinite loop, stoppable by signal
         while !stop_signal.load(Ordering::Relaxed) {
             std::thread::sleep(delay);
             let mut pair = lock.write().unwrap();
