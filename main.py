@@ -18,7 +18,7 @@ async def start_attack(request: Request, url: str = Form(...), file: UploadFile 
     print(f"URL: {url}")
     requests.post("http://localhost:8080/api/attack", json={"attack" : url})
     file_path = os.path.join("uploads", "configs", file.filename)
-    requests.post("http://localhost:8080/is_updating", json={"is_updating" : file_path})
+    requests.post("http://localhost:8080/currently_updating", json={"is_updating" : file_path})
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     

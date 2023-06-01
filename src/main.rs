@@ -219,7 +219,7 @@ fn main() {
         move |req: &mut Request| {
             let body = req.get::<bodyparser::Json>().unwrap();
             let received = match body {
-                None => serde_json::json!({"is_ipdating": ""}),
+                None => serde_json::json!({"is_updating": ""}),
                 Some(body) => serde_json::json!({"is_updating": body }),
             };
             let conn = Connection::open("bot_network.db").unwrap();
