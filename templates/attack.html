@@ -1,21 +1,27 @@
-<!-- attack.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attack</title>
-</head>
-<body>
-    <h1>Attack Page</h1>
-    <p>URL attacking: {{ url }}</p>
-    <p>Status: {{ status }}</p>
-    <form action="/statistics" method="get">
-        <button type="submit">Stop Attack</button>
-    </form>
-    <form action="/update" method="get">
-        <button type="submit">Change IP</button>
-    </form>
-</body>
-</html>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Attack</title>
+        <link rel="stylesheet" href="/static/styles.css">
+    </head>
+    <body>
+        <div class="container">
+            <h1>Attack Page</h1>
+            <p>URL attacking: {{ url }}</p>
+            <p>Status: {{ status }}</p>
+            <form action="/statistics" method="get">
+                <div class="button-group">
+                    <button class="button button-red" type="submit">Stop Attack</button>
+                </div>
+            </form>
+            <form action="/update" method="get">
+                <div class="button-group">
+                    <button class="button button-green" type="submit">Change IP</button>
+                </div>
+            </form>
+        </div>
+    </body>
+    </html>
