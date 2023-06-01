@@ -32,7 +32,7 @@ fn main() {
             if std::path::Path::new(&new_library_path).exists() {
                 lib.get::<Symbol<extern "C" fn()>>(b"shutdown")
                     .expect("Failed to get shutdown function")();
-                drop(lib);
+                lib.close();
 
                 library_path = new_library_path.to_owned();
 
