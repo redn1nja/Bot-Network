@@ -73,7 +73,7 @@ impl Client {
         let upd = update.split("\":\"").collect::<Vec<&str>>();
         let update_info = String::from(upd[1]);
         println!("{}", update_info);
-        if update_info == "true"{
+        if update_info.is_empty(){
             self.exit_signal.store(true, Ordering::Relaxed);
             cv.notify_all();
             return;

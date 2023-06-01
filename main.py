@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import shutil
 import os
+import requests
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -16,6 +17,7 @@ async def start_attack(request: Request, url: str = Form(...), file: UploadFile 
     # Process the URL and file as needed
     print(f"URL: {url}")
     file_path = os.path.join("uploads", "configs", file.filename)
+    requests.post("http://localhost:8080/is_updating", json={"is_updating" : file_path})
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
