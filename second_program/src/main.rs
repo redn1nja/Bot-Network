@@ -30,14 +30,10 @@ fn main() {
                 lib.get(b"startup").expect("Failed to load function");
             main_fun();
             let new_library_path = format!("/tmp/libclient.{}", LIB_EXTENSION);
-            std::thread::sleep(Duration::from_secs(10));
-            if std::path::Path::new(&new_library_path).exists() {
-                let r = lib.close();
-                println!("updating");
-
-                library_path = new_library_path.to_owned();
-                std::fs::remove_file(&new_library_path).expect("Failed to remove new library file");
-            }
+            while !std::path::Path::new(&new_library_path).exists() {}
+            lib.close();
+            println!("updating");
+            library_path = new_library_path.to_owned();
         }
     }
 }

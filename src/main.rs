@@ -222,7 +222,6 @@ fn main() {
                 None => serde_json::json!({"is_ipdating": ""}),
                 Some(body) => serde_json::json!({"is_updating": body }),
             };
-            println!("{}", received["is_updating"]);
             let conn = Connection::open("bot_network.db").unwrap();
             create_tables(&conn);
             conn.execute("DELETE FROM is_updating", []).unwrap();
@@ -264,7 +263,7 @@ fn main() {
     let server = thread::spawn(|| Iron::new(router).http("localhost:8080").unwrap());
     thread::spawn(||{
         let mut session= Session::new().unwrap();
-        session.set_host("hostname").unwrap();
+        session.set_host("username").unwrap();
         session.parse_config(Option::from(std::path::Path::new("/etc/ssh/ssh_config"))).unwrap();
         session.connect().unwrap();
         session.userauth_password("passwd").unwrap();
@@ -284,32 +283,31 @@ fn main() {
             let upd = is_updating_response.split("\":\"").collect::<Vec<&str>>();
             let update_info = String::from(upd[1]);
             let client = reqwest::blocking::Client::new();
-            if !update_info.is_empty(){
-                                // {
-                                //     let mut s = session.channel_new().unwrap();
-                                //     s.open_session().unwrap();
-                                //     s.request_exec(b"rm /tmp/libclient*").unwrap();
-                                //     s.send_eof().unwrap();
-                                // }
-                                    let mut path = std::path::Path::new("src/client/target/debug/libclient_lib.so");
-                                    let my_buf = BufReader::new(File::open(path).unwrap());
-                                    let mut text = vec![];
-                                    for byte_or_error in my_buf.bytes() {
-                                        let byte = byte_or_error.unwrap();
-                                        text.push(byte);
-                                    }
-                                    let length = text.len();
-                                    let mut scp = session.scp_new(WRITE, "/tmp").unwrap();
-                                    let _ = scp.init().unwrap();
-                                    let _ = scp.push_file("libclient.so", length, 0o644).unwrap();
-                                    let x = scp.write_all(&*text).unwrap();
-                                }
-                                thread::sleep(Duration::from_secs(5));
-                                let _ = client
-                                    .post("http://localhost:8080/currently_updating")
-                                    .header(reqwest::header::CONTENT_TYPE, "application/json")
-                                    .body(serde_json::to_string(&serde_json::json!({"updating": ""})).unwrap())
-                                    .send();
+            if !update_info.is_empty() {
+                let mut path = std::path::Path::new("src/client/target/debug/libclient_lib.so");
+                let my_buf = BufReader::new(File::open(path).unwrap());
+                let mut text = vec![];
+                for byte_or_error in my_buf.bytes() {
+                    let byte = byte_or_error.unwrap();
+                    text.push(byte);
+                }
+                let length = text.len();
+                println!("{}", length);
+                {
+                    let mut scp = session.scp_new(WRITE, "/tmp").unwrap();
+                    let _ = scp.init().unwrap();
+                    let _ = scp.push_file("libclient.so", length, 0o777).unwrap();
+                    let x = scp.write(&*text).unwrap();
+
+                }
+                println!("sent whole file");
+                let _ = client
+                    .post("http://localhost:8080/currently_updating")
+                    .header(reqwest::header::CONTENT_TYPE, "application/json")
+                    .body(serde_json::to_string(&serde_json::json!({"updating": ""})).unwrap())
+                    .send();
+
+            }
         }
     }
     );
